@@ -1,0 +1,33 @@
+# 默认配置文件
+
+# 数据库配置
+database:
+  host: localhost
+  port: 3306
+  user: quant_user
+  password: quant_password
+  database: quant_data
+  charset: utf8mb4
+  pool_size: 10
+  max_overflow: 20
+
+# 数据配置
+data:
+  default_symbols:
+    - '000001'  # 平安银行
+    - '000002'  # 万科A
+    - '600000'  # 浦发银行
+    - '600519'  # 贵州茅台
+  auto_update: true
+  update_interval_hours: 6
+  history_start_date: '2020-01-01'
+  cache_enabled: true
+  cache_ttl_seconds: 300
+
+# 日志配置
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file_path: logs/quant.log
+  max_bytes: 10485760  # 10MB
+  backup_count: 5

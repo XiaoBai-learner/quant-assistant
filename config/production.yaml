@@ -1,0 +1,26 @@
+# 生产环境配置
+
+# 数据库配置
+database:
+  host: ${DB_HOST}
+  port: ${DB_PORT}
+  user: ${DB_USER}
+  password: ${DB_PASSWORD}
+  database: quant_data
+  charset: utf8mb4
+  pool_size: 20
+  max_overflow: 40
+
+# 数据配置
+data:
+  auto_update: true
+  update_interval_hours: 1
+  cache_enabled: true
+  cache_ttl_seconds: 60
+
+# 日志配置
+logging:
+  level: WARNING
+  file_path: /var/log/quant/quant.log
+  max_bytes: 52428800  # 50MB
+  backup_count: 10

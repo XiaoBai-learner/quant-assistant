@@ -1,0 +1,18 @@
+# 核心依赖
+akshare>=1.11.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# 数据库
+sqlalchemy>=2.0.0
+pymysql>=1.1.0
+cryptography>=41.0.0
+
+# 工具
+python-dotenv>=1.0.0
+loguru>=0.7.0
+
+# 开发依赖
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.0.0
