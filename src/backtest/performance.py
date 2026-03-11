@@ -53,7 +53,11 @@ class PerformanceAnalyzer:
         
         return metrics
     
-    def _calculate_return_metrics(self, df: pd.DataFrame) -> Dict[str, float]:
+    def _calculate_return_metrics(
+        self, 
+        df: pd.DataFrame,
+        benchmark_returns: pd.Series = None
+    ) -> Dict[str, float]:
         """计算收益指标"""
         returns = df['return'].dropna()
         
@@ -79,12 +83,20 @@ class PerformanceAnalyzer:
         max_dd = self._calculate_max_drawdown(df)
         calmar_ratio = annual_return / abs(max_dd) if max_dd != 0 else 0
         
+        # 信息比率 (如果有基准)
+        information_ratio = 0.0
+        if benchmark_returns is not None and len(benchmark_returns) == len(returns):
+            active_return = returns.mean() - benchmark_returns.mean()
+            tracking_error = (returns - benchmark_returns).std()
+            information_ratio = active_return / tracking_error if tracking_error > 0 else 0
+        
         return {
             'total_return': total_return,
             'annual_return': annual_return,
             'volatility': volatility,
             'sharpe_ratio': sharpe_ratio,
             'calmar_ratio': calmar_ratio,
+            'information_ratio': information_ratio,
         }
     
     def _calculate_risk_metrics(self, df: pd.DataFrame) -> Dict[str, float]:

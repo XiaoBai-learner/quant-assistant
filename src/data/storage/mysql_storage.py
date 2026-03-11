@@ -2,7 +2,7 @@
 MySQL 数据存储实现
 """
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy import insert, update, delete
@@ -21,8 +21,9 @@ logger = get_logger(__name__)
 class MySQLStorage(BaseStorage):
     """MySQL 数据存储实现"""
     
-    def __init__(self):
+    def __init__(self, validator=None):
         self.db = db_manager
+        self.validator = validator
         self._ensure_tables()
     
     def _ensure_tables(self):
@@ -53,10 +54,32 @@ class MySQLStorage(BaseStorage):
         self._log_update('stocks', None, None, None, count, 'success')
         return count
     
-    def save_daily_quotes(self, df: pd.DataFrame) -> int:
-        """保存日线行情数据"""
+    def save_daily_quotes(self, df: pd.DataFrame, validate: bool = True) -> int:
+        """
+        保存日线行情数据
+        
+        Args:
+            df: 日线数据DataFrame
+            validate: 是否进行数据校验，默认True
+            
+        Returns:
+            int: 保存的记录数
+        """
         if df.empty:
             return 0
+        
+        # 数据校验
+        if validate and self.validator:
+            from src.data.validator import DataValidator
+            if self.validator is None:
+                self.validator = DataValidator()
+            
+            result = self.validator.validate_price_data(df)
+            if not result.is_valid:
+                failed = result.get_failed_checks()
+                logger.warning(f"数据校验未通过: {[c.name for c in failed]}")
+                # 可以选择抛出异常或继续保存
+                # raise ValueError(f"数据校验失败: {failed[0].message}")
         
         df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
         records = df.to_dict('records')
