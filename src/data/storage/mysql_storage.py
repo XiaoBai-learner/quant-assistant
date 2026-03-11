@@ -1,9 +1,10 @@
 """
 MySQL 数据存储实现
+支持依赖注入
 """
 import pandas as pd
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Protocol
 
 from sqlalchemy import insert, update, delete
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -18,11 +19,36 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+class IDataValidator(Protocol):
+    """数据校验器接口"""
+    def validate_price_data(self, df: pd.DataFrame) -> Any: ...
+    def validate_stock_list(self, df: pd.DataFrame) -> Any: ...
+
+
+class IDatabaseManager(Protocol):
+    """数据库管理器接口"""
+    @property
+    def engine(self): ...
+    def session(self): ...
+    def test_connection(self) -> bool: ...
+
+
 class MySQLStorage(BaseStorage):
-    """MySQL 数据存储实现"""
+    """MySQL 数据存储实现，支持依赖注入"""
     
-    def __init__(self, validator=None):
-        self.db = db_manager
+    def __init__(
+        self,
+        db_manager: Optional[IDatabaseManager] = None,
+        validator: Optional[IDataValidator] = None
+    ):
+        """
+        初始化存储
+        
+        Args:
+            db_manager: 数据库管理器实例（可选）
+            validator: 数据校验器实例（可选）
+        """
+        self.db = db_manager or db_manager
         self.validator = validator
         self._ensure_tables()
     

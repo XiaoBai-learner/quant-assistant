@@ -1,8 +1,8 @@
 """
 回测引擎
-事件驱动的回测核心
+事件驱动的回测核心，支持依赖注入
 """
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Optional, Callable, Protocol
 from dataclasses import dataclass, field
 from datetime import datetime, date
 from enum import Enum
@@ -12,10 +12,36 @@ import numpy as np
 from .broker import Broker, Order, OrderType, OrderSide
 from .portfolio import Portfolio
 from .performance import PerformanceAnalyzer
-from src.strategy.base import BaseStrategy, Bar, StrategyContext
+from src.strategy.base import BaseStrategy, Bar, StrategyContext, Signal
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+# 接口定义
+class IBroker(Protocol):
+    """券商接口"""
+    def submit_order(self, order: Order) -> bool: ...
+    def execute_order(self, order: Order, bar) -> List[Any]: ...
+    def cancel_order(self, order_id: str) -> bool: ...
+
+
+class IPortfolio(Protocol):
+    """投资组合接口"""
+    def update_position(self, symbol: str, volume: int, price: float) -> None: ...
+    def get_position(self, symbol: str) -> int: ...
+    def get_total_value(self, prices: Dict[str, float]) -> float: ...
+
+
+class IPerformanceAnalyzer(Protocol):
+    """绩效分析器接口"""
+    def calculate_metrics(self, daily_records: pd.DataFrame, trade_records: pd.DataFrame = None) -> Dict[str, float]: ...
+    def generate_report(self, metrics: Dict[str, float], output_path: str = None) -> str: ...
+
+
+class IRiskManager(Protocol):
+    """风险管理器接口"""
+    def check_order(self, order: Order, portfolio: Dict[str, Any]) -> Any: ...
 
 
 class BacktestMode(Enum):
@@ -53,14 +79,34 @@ class BacktestEngine:
     """
     回测引擎
     
-    事件驱动的回测核心，支持逐K线推进
+    事件驱动的回测核心，支持依赖注入
     """
     
-    def __init__(self, config: BacktestConfig):
+    def __init__(
+        self,
+        config: BacktestConfig,
+        broker: Optional[IBroker] = None,
+        portfolio: Optional[IPortfolio] = None,
+        analyzer: Optional[IPerformanceAnalyzer] = None,
+        risk_manager: Optional[IRiskManager] = None
+    ):
+        """
+        初始化回测引擎
+        
+        Args:
+            config: 回测配置
+            broker: 券商实例（可选，默认使用Broker）
+            portfolio: 投资组合实例（可选，默认使用Portfolio）
+            analyzer: 绩效分析器实例（可选，默认使用PerformanceAnalyzer）
+            risk_manager: 风险管理器实例（可选）
+        """
         self.config = config
-        self.broker = Broker(config)
-        self.portfolio = Portfolio(config.initial_cash)
-        self.analyzer = PerformanceAnalyzer()
+        
+        # 依赖注入，使用默认实现
+        self.broker = broker or Broker(config)
+        self.portfolio = portfolio or Portfolio(config.initial_cash)
+        self.analyzer = analyzer or PerformanceAnalyzer()
+        self.risk_manager = risk_manager
         
         # 策略
         self.strategy: Optional[BaseStrategy] = None
