@@ -217,11 +217,24 @@ quant-assistant/
 | trade_calendar | 交易日历 | trade_date, is_trading_day |
 | update_logs | 更新日志 | table_name, record_count, status |
 
-## 📚 模块文档
+## 📚 文档
+
+### 使用手册
+
+📖 **[使用手册 (USER_GUIDE.md)](docs/USER_GUIDE.md)** - 完整的使用指南，包含：
+- 快速开始
+- 数据管理（获取、存储、查询、校验、缓存）
+- 策略开发（创建策略、因子、组合、优化）
+- 回测验证（事件驱动、向量化、风控、绩效分析）
+- 高级功能（依赖注入、事件系统）
+- API参考
+- 常见问题
+
+### 模块文档
 
 | 模块 | 文档 | 说明 |
 |------|------|------|
-| Core | [src/core/describe.md](src/core/describe.md) | 事件系统、上下文管理 |
+| Core | [src/core/describe.md](src/core/describe.md) | 事件系统、上下文管理、依赖注入 |
 | Data | [src/data/describe.md](src/data/describe.md) | 数据获取、存储、查询 |
 | Strategy | [src/strategy/describe.md](src/strategy/describe.md) | 策略框架、因子、信号 |
 | Backtest | [src/backtest/describe.md](src/backtest/describe.md) | 回测引擎、绩效分析 |
@@ -238,21 +251,24 @@ quant-assistant/
 ### Phase 2: 策略版 ✅
 - [x] 策略框架
 - [x] 技术指标
-- [x] 回测引擎
+- [x] 回测引擎（事件驱动 + 向量化）
+- [x] 真实撮合引擎
+- [x] 风控管理
 - [x] 绩效分析
-- [x] 可视化
+- [x] 策略参数优化
+- [x] 策略组合
+- [x] 多级缓存
+- [x] 依赖注入
 
 ### Phase 3: 实盘版 (规划中)
-- [ ] 交易接口
-- [ ] 风控系统
-- [ ] 订单管理
-- [ ] 监控告警
+- [ ] 交易接口（⚠️ 当前不支持）
+- [ ] 自动订单执行（⚠️ 当前不支持）
+- [ ] 实时监控（⚠️ 当前不支持）
 
 ### Phase 4: 平台版 (规划中)
-- [ ] Web 前端
-- [ ] 多策略管理
-- [ ] 用户系统
-- [ ] 可视化面板
+- [ ] Web 前端（⚠️ 当前不支持）
+- [ ] 分布式回测（⚠️ 当前不支持）
+- [ ] 强化学习策略（⚠️ 当前不支持）
 
 ## 🤝 贡献
 
