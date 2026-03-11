@@ -36,11 +36,34 @@
 - [x] 数据质量校验
 - [x] 命令行工具
 
-### Phase 2: 策略研究层 (开发中)
-- [ ] 策略框架
-- [ ] 技术指标库
-- [ ] 回测引擎
-- [ ] 绩效分析
+**文档**: [src/data/describe.md](src/data/describe.md)
+
+### Phase 2: 策略研究层 ✅ (已完成)
+- [x] 策略框架 (BaseStrategy)
+- [x] 技术指标库 (MA, MACD, RSI, BOLL, KDJ等)
+- [x] 因子计算引擎
+- [x] 信号生成器
+- [x] 股票筛选器
+- [x] 机器学习集成
+
+**文档**: [src/strategy/describe.md](src/strategy/describe.md)
+
+### Phase 2: 回测模拟层 ✅ (已完成)
+- [x] 事件驱动回测引擎
+- [x] 券商模拟 (订单撮合)
+- [x] 投资组合管理
+- [x] 绩效分析 (夏普比率、最大回撤等)
+- [x] 成本模型 (手续费、滑点、印花税)
+
+**文档**: [src/backtest/describe.md](src/backtest/describe.md)
+
+### Phase 2: 可视化层 ✅ (已完成)
+- [x] ASCII K线图
+- [x] 技术指标显示
+- [x] 数据表格渲染
+- [x] 命令行图表工具
+
+**文档**: [src/visualization/describe.md](src/visualization/describe.md)
 
 ### Phase 3: 实盘交易层 (规划中)
 - [ ] 交易接口
@@ -53,7 +76,6 @@
 ### 环境要求
 - Python 3.10+
 - MySQL 8.0+
-- Redis 7.0+ (可选)
 
 ### 安装
 
@@ -115,30 +137,72 @@ python main.py update-daily
 
 # 查询数据
 python main.py query --symbol 000001 --days 30
+
+# 显示K线图
+python main.py chart --symbol 000001
+
+# 显示周线
+python main.py chart --symbol 000001 --period W
+
+# 显示带MACD
+python main.py chart --symbol 000001 --macd
 ```
 
 ## 📁 项目结构
 
 ```
 quant-assistant/
-├── README.md
-├── docs/                      # 文档
-│   ├── architecture_design.md # 架构设计
-│   └── data_management_phase1.md
-├── config/                    # 配置文件
+├── README.md                 # 项目说明
+├── main.py                   # 主程序入口
+├── requirements.txt          # Python依赖
+├── .env.example             # 环境变量模板
+├── config/                  # 配置文件
 │   ├── default.yaml
 │   └── production.yaml
-├── src/                       # 源代码
-│   ├── core/                  # 核心框架
-│   ├── data/                  # 数据管理层 ✅
-│   ├── strategy/              # 策略层
-│   ├── backtest/              # 回测层
-│   ├── trading/               # 交易层
-│   ├── risk/                  # 风控层
-│   └── utils/                 # 工具模块
-├── tests/                     # 测试代码
-├── scripts/                   # 脚本工具
-└── requirements.txt           # 依赖包
+├── docs/                    # 文档
+│   ├── architecture_design.md
+│   ├── data_management_phase1.md
+│   ├── strategy_layer_design.md
+│   └── ui_layer_design.md
+├── src/                     # 源代码
+│   ├── core/                # 核心框架
+│   │   ├── events.py        # 事件系统
+│   │   ├── context.py       # 上下文管理
+│   │   └── describe.md      # 模块说明
+│   ├── data/                # 数据管理层
+│   │   ├── fetcher/         # 数据获取
+│   │   ├── storage/         # 数据存储
+│   │   ├── query/           # 数据查询
+│   │   ├── database/        # 数据库连接
+│   │   └── describe.md      # 模块说明
+│   ├── strategy/            # 策略层
+│   │   ├── base.py          # 策略基类
+│   │   ├── factors/         # 因子引擎
+│   │   ├── signal_synthesis/# 信号合成
+│   │   ├── ml/              # 机器学习
+│   │   └── describe.md      # 模块说明
+│   ├── backtest/            # 回测层
+│   │   ├── engine.py        # 回测引擎
+│   │   ├── broker.py        # 券商模拟
+│   │   ├── portfolio.py     # 投资组合
+│   │   ├── performance.py   # 绩效分析
+│   │   └── describe.md      # 模块说明
+│   ├── visualization/       # 可视化层
+│   │   ├── indicators/      # 技术指标
+│   │   ├── layouts/         # 图表布局
+│   │   ├── renderers/       # 渲染器
+│   │   ├── adapters/        # 数据适配
+│   │   └── describe.md      # 模块说明
+│   ├── utils/               # 工具模块
+│   │   ├── logger.py        # 日志管理
+│   │   ├── config.py        # 配置管理
+│   │   └── describe.md      # 模块说明
+│   └── config.py            # 主配置
+└── tests/                   # 测试代码
+    ├── test_integration.py  # 集成测试
+    ├── test_backtest.py     # 回测测试
+    ├── test_strategy.py     # 策略测试
+    └── ...
 ```
 
 ## 📊 数据库设计
@@ -153,6 +217,17 @@ quant-assistant/
 | trade_calendar | 交易日历 | trade_date, is_trading_day |
 | update_logs | 更新日志 | table_name, record_count, status |
 
+## 📚 模块文档
+
+| 模块 | 文档 | 说明 |
+|------|------|------|
+| Core | [src/core/describe.md](src/core/describe.md) | 事件系统、上下文管理 |
+| Data | [src/data/describe.md](src/data/describe.md) | 数据获取、存储、查询 |
+| Strategy | [src/strategy/describe.md](src/strategy/describe.md) | 策略框架、因子、信号 |
+| Backtest | [src/backtest/describe.md](src/backtest/describe.md) | 回测引擎、绩效分析 |
+| Visualization | [src/visualization/describe.md](src/visualization/describe.md) | 图表渲染、技术指标 |
+| Utils | [src/utils/describe.md](src/utils/describe.md) | 日志、配置 |
+
 ## 🛠️ 开发路线图
 
 ### Phase 1: 基础版 ✅
@@ -160,19 +235,20 @@ quant-assistant/
 - [x] CLI 工具
 - [x] 基础架构
 
-### Phase 2: 策略版
-- [ ] 策略框架
-- [ ] 技术指标
-- [ ] 回测引擎
-- [ ] 绩效分析
+### Phase 2: 策略版 ✅
+- [x] 策略框架
+- [x] 技术指标
+- [x] 回测引擎
+- [x] 绩效分析
+- [x] 可视化
 
-### Phase 3: 实盘版
+### Phase 3: 实盘版 (规划中)
 - [ ] 交易接口
 - [ ] 风控系统
 - [ ] 订单管理
 - [ ] 监控告警
 
-### Phase 4: 平台版
+### Phase 4: 平台版 (规划中)
 - [ ] Web 前端
 - [ ] 多策略管理
 - [ ] 用户系统
