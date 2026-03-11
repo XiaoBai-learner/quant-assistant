@@ -1,5 +1,6 @@
 """
 数据查询接口 - 提供统一的数据访问
+支持多级缓存
 """
 import pandas as pd
 import numpy as np
@@ -7,17 +8,29 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional, Dict, Any, Union
 
 from src.storage.mysql_storage import MySQLStorage
+from src.data.cache import DataCache, cached
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class DataQueryEngine:
-    """数据查询引擎"""
+    """
+    数据查询引擎
     
-    def __init__(self):
+    支持多级缓存：内存 + Redis
+    """
+    
+    def __init__(self, cache: DataCache = None):
+        """
+        初始化查询引擎
+        
+        Args:
+            cache: 数据缓存实例，默认创建新的缓存
+        """
         self.storage = MySQLStorage()
-        self._cache = {}
+        self.cache = cache or DataCache()
+        self._local_cache = {}
     
     def get_stock_info(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取股票基本信息"""
