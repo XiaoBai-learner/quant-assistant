@@ -188,20 +188,38 @@ class PerformanceAnalyzer:
         return drawdown.min()
     
     def _calculate_max_drawdown_duration(self, df: pd.DataFrame) -> int:
-        """计算最大回撤持续时间"""
-        if 'total_value' not in df.columns:
+        """
+        计算最大回撤持续时间
+        
+        从高点到恢复的时间（天数）
+        """
+        if 'total_value' not in df.columns or len(df) < 2:
             return 0
         
+        # 计算累计最大值和回撤
         cummax = df['total_value'].cummax()
         drawdown = (df['total_value'] - cummax) / cummax
         
         # 找到最大回撤点
         max_dd_idx = drawdown.idxmin()
-        max_dd_date = df.loc[max_dd_idx, 'date'] if 'date' in df.columns else None
         
-        # 计算从高点到恢复的时间
-        # 简化处理：返回天数
-        return 30  # 占位
+        # 找到回撤开始的高点位置
+        peak_idx = cummax[:max_dd_idx].idxmax() if max_dd_idx > 0 else 0
+        
+        # 找到恢复点（回到高点或数据结束）
+        recovery_idx = None
+        for i in range(max_dd_idx + 1, len(df)):
+            if df['total_value'].iloc[i] >= cummax.iloc[max_dd_idx]:
+                recovery_idx = i
+                break
+        
+        if recovery_idx is None:
+            recovery_idx = len(df) - 1
+        
+        # 计算持续时间
+        duration = recovery_idx - peak_idx
+        
+        return max(duration, 0)
     
     def generate_report(
         self,
