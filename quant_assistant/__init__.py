@@ -40,6 +40,7 @@ except ImportError:
 try:
     from quant_assistant.data import (
         DataFetcher,
+        EFinanceFetcher,
         MySQLStorage,
         DataQuery,
         CacheManager,
@@ -132,6 +133,7 @@ __all__ = [
     
     # 数据
     "DataFetcher",
+    "EFinanceFetcher",
     "MySQLStorage",
     "DataQuery",
     "CacheManager",
