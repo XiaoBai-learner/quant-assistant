@@ -75,9 +75,23 @@
 
 ### 环境要求
 - Python 3.10+
-- MySQL 8.0+
+- MySQL 8.0+ (可选，用于数据持久化)
 
 ### 安装
+
+#### 方式一：pip 安装（推荐）
+
+```bash
+# 从 PyPI 安装（发布后会可用）
+pip install quant-assistant
+
+# 或从源码安装
+git clone https://github.com/XiaoBai-learner/quant-assistant.git
+cd quant-assistant
+pip install -e .
+```
+
+#### 方式二：源码安装
 
 ```bash
 # 克隆项目
@@ -91,6 +105,16 @@ source venv/bin/activate  # Linux/Mac
 
 # 安装依赖
 pip install -r requirements.txt
+```
+
+### 验证安装
+
+```bash
+# 查看版本
+quant version
+
+# 或使用 Python
+python -c "import quant_assistant; print(quant_assistant.__version__)"
 ```
 
 ### 配置
@@ -126,27 +150,52 @@ FLUSH PRIVILEGES;
 python main.py init
 ```
 
-### 使用
+### 快速示例
+
+```python
+import quant_assistant as qa
+from quant_assistant import QuantAPI
+
+# 创建 API 实例
+api = QuantAPI()
+
+# 获取迈为股份数据
+data = api.data.get_stock_data('300751', start='2024-01-01')
+
+# 计算技术指标
+ma20 = api.factors.ma(data, window=20)
+macd = api.factors.macd(data)
+
+# 创建策略并回测
+strategy = api.strategy.create('ma_cross', short_window=10, long_window=30)
+result = api.backtest.run(strategy, data)
+
+# 查看回测结果
+analysis = api.backtest.analyze(result)
+print(f"总收益率: {analysis['total_return']*100:.2f}%")
+```
+
+### 命令行工具
 
 ```bash
-# 更新股票列表
-python main.py update-stocks
+# 查看版本
+quant version
 
-# 更新日线数据
-python main.py update-daily
+# 获取股票数据
+quant data get 300751 --start 2024-01-01
 
-# 查询数据
-python main.py query --symbol 000001 --days 30
+# 计算技术指标
+quant factor ma 300751 --window 20
+quant factor all 300751
 
-# 显示K线图
-python main.py chart --symbol 000001
+# 运行回测
+quant backtest run ma_cross --symbol 300751 --capital 100000
 
-# 显示周线
-python main.py chart --symbol 000001 --period W
-
-# 显示带MACD
-python main.py chart --symbol 000001 --macd
+# 训练ML模型
+quant ml train 300751 --model random_forest
 ```
+
+更多用法请参考 [使用手册](docs/USAGE_GUIDE.md)
 
 ## 📁 项目结构
 

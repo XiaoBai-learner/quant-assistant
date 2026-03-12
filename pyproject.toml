@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant-assistant"
+version = "1.0.0"
+description = "A modular quantitative trading framework for personal use"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "XiaoBai-learner", email = "185890339@qq.com"}
+]
+keywords = ["quantitative", "trading", "backtest", "strategy", "finance", "stock"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "akshare>=1.11.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "sqlalchemy>=2.0.0",
+    "pymysql>=1.1.0",
+    "cryptography>=41.0.0",
+    "python-dotenv>=1.0.0",
+    "loguru>=0.7.0",
+    "scikit-learn>=1.3.0",
+    "matplotlib>=3.7.0",
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+]
+
+[project.scripts]
+quant = "quant_assistant.cli:main"
+qa = "quant_assistant.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/XiaoBai-learner/quant-assistant"
+Documentation = "https://github.com/XiaoBai-learner/quant-assistant/blob/main/docs/USAGE_GUIDE.md"
+Repository = "https://github.com/XiaoBai-learner/quant-assistant.git"
+Issues = "https://github.com/XiaoBai-learner/quant-assistant/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quant_assistant*"]
+exclude = ["tests*", "docs*"]
+
+[tool.setuptools.package-data]
+quant_assistant = ["*.yaml", "*.json", "*.sql"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
