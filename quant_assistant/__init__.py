@@ -54,6 +54,10 @@ try:
         TechnicalFactor,
         CompositeFactor,
     )
+    # 便捷函数：一次性计算所有因子
+    from quant_assistant.api import QuantAPI
+    _default_api = QuantAPI()
+    compute_factors = _default_api.factors.compute_all_factors
 except ImportError:
     pass
 

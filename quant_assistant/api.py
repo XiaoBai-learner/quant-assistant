@@ -311,7 +311,7 @@ class FactorAPI:
     
     def compute_all(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        计算所有常用技术指标
+        计算所有常用技术指标（基础版）
         
         Args:
             data: OHLCV 数据
@@ -321,6 +321,37 @@ class FactorAPI:
         """
         engine = self._get_engine()
         return engine.compute_all(data)
+    
+    def compute_all_factors(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        计算所有策略因子（完整版）
+        
+        一次性计算所有常用技术指标、量价因子、波动率因子等，
+        包含80+个因子，方便策略开发和机器学习特征工程。
+        
+        Args:
+            data: OHLCV 数据
+            
+        Returns:
+            添加了所有因子列的 DataFrame
+            
+        计算的因子类别:
+            - 趋势类: MA, EMA, MACD, 均线差值/比值
+            - 动量类: RSI, KDJ, 价格动量
+            - 波动率类: 布林带, ATR, 历史波动率
+            - 量价类: 成交量MA, 量价关系, OBV
+            - 形态类: 影线, 价格位置
+            - 统计类: 收益率统计, 最大回撤
+            - 复合信号: 均线排列, 趋势强度
+            
+        示例:
+            >>> data = api.data.get_stock_data('300751')
+            >>> df = api.factors.compute_all_factors(data)
+            >>> print(f"共计算 {len(df.columns)} 个因子")
+            >>> print(df[['ma5', 'rsi14', 'macd', 'boll_width_20']].tail())
+        """
+        engine = self._get_engine()
+        return engine.compute_all_factors(data)
 
 
 class StrategyAPI:
