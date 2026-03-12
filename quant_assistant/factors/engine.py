@@ -334,4 +334,110 @@ class FactorEngine:
         # 综合趋势强度
         df['trend_strength'] = (df['ma5_10_ratio'] + df['ma10_20_ratio']) / 2
         
+        # ========== 扩展因子 (来自 src/strategy/factors/technical_extended.py) ==========
+        
+        # ADX - 平均趋向指数
+        for period in [14]:
+            high, low, close = df['high'], df['low'], df['close']
+            plus_dm = high.diff()
+            minus_dm = -low.diff()
+            plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+            minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+            
+            tr1 = high - low
+            tr2 = np.abs(high - close.shift())
+            tr3 = np.abs(low - close.shift())
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr_adx = tr.rolling(window=period).mean()
+            
+            plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr_adx)
+            minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr_adx)
+            dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
+            df[f'adx{period}'] = dx.rolling(window=period).mean()
+            df[f'plus_di{period}'] = plus_di
+            df[f'minus_di{period}'] = minus_di
+        
+        # CCI - 商品通道指数
+        for period in [20]:
+            tp = (df['high'] + df['low'] + df['close']) / 3
+            ma_tp = tp.rolling(window=period).mean()
+            md_tp = tp.rolling(window=period).apply(lambda x: np.abs(x - x.mean()).mean())
+            df[f'cci{period}'] = (tp - ma_tp) / (0.015 * md_tp)
+        
+        # 威廉指标 %R
+        for period in [14]:
+            highest_high = df['high'].rolling(window=period).max()
+            lowest_low = df['low'].rolling(window=period).min()
+            df[f'wr{period}'] = -100 * (highest_high - df['close']) / (highest_high - lowest_low)
+        
+        # 动量因子 MOM
+        for period in [10, 20]:
+            df[f'mom{period}'] = df['close'] - df['close'].shift(period)
+        
+        # ROC - 变化率
+        for period in [10, 20]:
+            df[f'roc{period}'] = (df['close'] / df['close'].shift(period) - 1) * 100
+        
+        # 唐奇安通道
+        for period in [20]:
+            dc_upper = df['high'].rolling(window=period).max()
+            dc_lower = df['low'].rolling(window=period).min()
+            dc_middle = (dc_upper + dc_lower) / 2
+            df[f'dc_upper_{period}'] = dc_upper
+            df[f'dc_lower_{period}'] = dc_lower
+            df[f'dc_middle_{period}'] = dc_middle
+            df[f'dc_width_{period}'] = (dc_upper - dc_lower) / dc_middle
+        
+        # 一目均衡表
+        tenkan_period, kijun_period = 9, 26
+        tenkan_sen = (df['high'].rolling(window=tenkan_period).max() + 
+                      df['low'].rolling(window=tenkan_period).min()) / 2
+        kijun_sen = (df['high'].rolling(window=kijun_period).max() + 
+                     df['low'].rolling(window=kijun_period).min()) / 2
+        df['tenkan_sen'] = tenkan_sen
+        df['kijun_sen'] = kijun_sen
+        df['ichimoku_cloud'] = np.abs(tenkan_sen - kijun_sen)
+        df['ichimoku_golden_cross'] = ((tenkan_sen > kijun_sen) & 
+                                       (tenkan_sen.shift(1) <= kijun_sen.shift(1))).astype(int)
+        
+        # 资金流量指标 MFI
+        for period in [14]:
+            typical_price = (df['high'] + df['low'] + df['close']) / 3
+            raw_money_flow = typical_price * df['volume']
+            money_flow = raw_money_flow.where(typical_price > typical_price.shift(), -raw_money_flow)
+            positive_flow = money_flow.where(money_flow > 0, 0).rolling(window=period).sum()
+            negative_flow = np.abs(money_flow.where(money_flow < 0, 0)).rolling(window=period).sum()
+            money_ratio = positive_flow / negative_flow
+            df[f'mfi{period}'] = 100 - (100 / (1 + money_ratio))
+        
+        # 价量趋势 PVT
+        close_change = df['close'].pct_change()
+        df['pvt'] = (close_change * df['volume']).cumsum()
+        
+        # 真实波幅 TR
+        tr1 = df['high'] - df['low']
+        tr2 = np.abs(df['high'] - df['close'].shift())
+        tr3 = np.abs(df['low'] - df['close'].shift())
+        df['tr'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        
+        # 成交额因子
+        df['turnover'] = df['volume'] / df['volume'].rolling(20).mean()
+        df['amount_change'] = df['amount'].pct_change()
+        
+        # 振幅因子
+        df['amplitude'] = (df['high'] - df['low']) / df['low']
+        for window in [5, 10, 20]:
+            df[f'amplitude_ma{window}'] = df['amplitude'].rolling(window).mean()
+        
+        # 连涨连跌天数
+        df['price_up'] = (df['close'] > df['close'].shift()).astype(int)
+        df['consecutive_up'] = df['price_up'] * (df['price_up'].groupby(
+            (df['price_up'] != df['price_up'].shift()).cumsum()).cumcount() + 1)
+        df['consecutive_up'] = df['consecutive_up'].where(df['price_up'] == 1, 0)
+        
+        df['price_down'] = (df['close'] < df['close'].shift()).astype(int)
+        df['consecutive_down'] = df['price_down'] * (df['price_down'].groupby(
+            (df['price_down'] != df['price_down'].shift()).cumsum()).cumcount() + 1)
+        df['consecutive_down'] = df['consecutive_down'].where(df['price_down'] == 1, 0)
+        
         return df
