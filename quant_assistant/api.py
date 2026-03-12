@@ -238,6 +238,13 @@ class FactorAPI:
             self._engine = FactorEngine()
         return self._engine
     
+    def _get_engine_v2(self):
+        """懒加载因子引擎V2"""
+        if not hasattr(self, '_engine_v2') or self._engine_v2 is None:
+            from quant_assistant.factors.engine_v2 import FactorEngineV2
+            self._engine_v2 = FactorEngineV2()
+        return self._engine_v2
+    
     def ma(self, data: pd.DataFrame, window: int = 20) -> pd.Series:
         """
         计算移动平均线
@@ -327,7 +334,8 @@ class FactorAPI:
         计算所有策略因子（完整版）
         
         一次性计算所有常用技术指标、量价因子、波动率因子等，
-        包含80+个因子，方便策略开发和机器学习特征工程。
+        自动检测数据粒度（日线/分钟级/实时），计算适合的因子。
+        包含120+个因子，方便策略开发和机器学习特征工程。
         
         Args:
             data: OHLCV 数据
@@ -337,12 +345,13 @@ class FactorAPI:
             
         计算的因子类别:
             - 趋势类: MA, EMA, MACD, 均线差值/比值
-            - 动量类: RSI, KDJ, 价格动量
+            - 动量类: RSI, KDJ, CCI, WR, 价格动量
             - 波动率类: 布林带, ATR, 历史波动率
-            - 量价类: 成交量MA, 量价关系, OBV
+            - 量价类: 成交量MA, 量价关系, OBV, MFI
             - 形态类: 影线, 价格位置
             - 统计类: 收益率统计, 最大回撤
             - 复合信号: 均线排列, 趋势强度
+            - 实时因子: 实时换手率, 涨速, 量比等
             
         示例:
             >>> data = api.data.get_stock_data('300751')
@@ -352,6 +361,44 @@ class FactorAPI:
         """
         engine = self._get_engine()
         return engine.compute_all_factors(data)
+    
+    def compute_factors_v2(
+        self,
+        data: pd.DataFrame,
+        granularity = None,
+        categories = None
+    ) -> pd.DataFrame:
+        """
+        计算策略因子 V2（支持多粒度）⭐
+        
+        根据数据粒度自动选择合适的因子进行计算：
+        - 日线数据：计算中长期因子（MA5-120, RSI等）
+        - 分钟数据：计算短周期因子（短周期MA, 日内指标等）
+        - 实时数据：计算实时因子（换手率, 涨速, 量比等）
+        
+        Args:
+            data: OHLCV数据或实时行情数据
+            granularity: 指定粒度，None则自动检测
+            categories: 指定计算的因子类别，None则计算所有
+            
+        Returns:
+            添加了因子的DataFrame
+            
+        示例:
+            >>> from quant_assistant import TimeGranularity, FactorCategory
+            >>> 
+            >>> # 自动检测粒度并计算
+            >>> df = api.factors.compute_factors_v2(data)
+            >>> 
+            >>> # 指定粒度和类别
+            >>> df = api.factors.compute_factors_v2(
+            ...     data,
+            ...     granularity=TimeGranularity.MINUTE_5,
+            ...     categories=[FactorCategory.TREND, FactorCategory.MOMENTUM]
+            ... )
+        """
+        engine = self._get_engine_v2()
+        return engine.compute_factors(data, granularity, categories)
 
 
 class StrategyAPI:

@@ -52,6 +52,9 @@ except ImportError:
 try:
     from quant_assistant.factors import (
         FactorEngine,
+        FactorEngineV2,
+        TimeGranularity,
+        FactorCategory,
         TechnicalFactor,
         CompositeFactor,
     )
@@ -140,6 +143,9 @@ __all__ = [
     
     # 因子
     "FactorEngine",
+    "FactorEngineV2",
+    "TimeGranularity",
+    "FactorCategory",
     "TechnicalFactor",
     "CompositeFactor",
     
