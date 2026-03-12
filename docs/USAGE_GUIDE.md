@@ -161,16 +161,66 @@ kdj = api.factors.kdj(data)
 print(f"K: {kdj['k'].iloc[-1]:.2f}, D: {kdj['d'].iloc[-1]:.2f}, J: {kdj['j'].iloc[-1]:.2f}")
 ```
 
-### 计算所有指标
+### 计算所有指标（基础版）
 
 ```python
-# 一键计算所有技术指标
+# 一键计算所有技术指标（约30个）
 data_with_factors = api.factors.compute_all(data)
 
 print(data_with_factors.columns)
 # 输出: ['open', 'high', 'low', 'close', 'volume', 
 #        'ma5', 'ma10', 'ma20', 'ma60', 
 #        'ema12', 'ema26', 'macd', 'macd_signal', ...]
+```
+
+### 计算所有策略因子（完整版）⭐
+
+```python
+# 一次性计算120+个策略因子，包含趋势、动量、波动率、量价、形态、统计、复合信号等
+# 适合策略开发和机器学习特征工程
+df = api.factors.compute_all_factors(data)
+
+print(f"共计算 {len(df.columns)} 个因子")
+print(df.columns.tolist())
+```
+
+#### 因子分类说明
+
+| 类别 | 因子示例 | 数量 |
+|------|---------|------|
+| **趋势类** | ma5/10/20/30/60/120, ema, MACD, 均线差值/比值, 金叉死叉信号 | 25+ |
+| **动量类** | rsi6/12/14/24, KDJ, 威廉指标WR, CCI, MOM, ROC | 15+ |
+| **波动率类** | 布林带, ATR, 唐奇安通道, 历史波动率, 振幅 | 20+ |
+| **量价类** | 成交量MA, 量价相关性, OBV, MFI, PVT, 换手率 | 15+ |
+| **形态类** | 影线, 价格位置, 实体大小, 连涨连跌天数 | 10+ |
+| **统计类** | 收益率统计, 最大回撤, 偏度峰度 | 20+ |
+| **复合信号** | 均线多头排列/空头排列, 趋势强度, 一目金叉 | 10+ |
+
+#### 常用扩展因子示例
+
+```python
+# 获取完整因子数据
+df = api.factors.compute_all_factors(data)
+
+# 趋势强度因子
+print(f"ADX(14): {df['adx14'].iloc[-1]:.2f}")  # 平均趋向指数
+print(f"+DI(14): {df['plus_di14'].iloc[-1]:.2f}")
+print(f"-DI(14): {df['minus_di14'].iloc[-1]:.2f}")
+
+# 动量因子
+print(f"CCI(20): {df['cci20'].iloc[-1]:.2f}")  # 商品通道指数
+print(f"WR(14): {df['wr14'].iloc[-1]:.2f}")    # 威廉指标
+print(f"MOM(10): {df['mom10'].iloc[-1]:.2f}")  # 动量
+print(f"ROC(10): {df['roc10'].iloc[-1]:.2f}")  # 变化率
+
+# 通道因子
+print(f"唐奇安通道宽度: {df['dc_width_20'].iloc[-1]:.4f}")
+print(f"一目均衡表云厚: {df['ichimoku_cloud'].iloc[-1]:.2f}")
+
+# 量价因子
+print(f"MFI(14): {df['mfi14'].iloc[-1]:.2f}")  # 资金流量指标
+print(f"换手率: {df['turnover'].iloc[-1]:.2f}")
+print(f"连涨天数: {df['consecutive_up'].iloc[-1]}")
 ```
 
 ---
@@ -429,7 +479,74 @@ api.ml        # 机器学习
 | `rsi()` | RSI指标 | data, window |
 | `bollinger()` | 布林带 | data, window, std |
 | `kdj()` | KDJ指标 | data, n, m1, m2 |
-| `compute_all()` | 所有指标 | data |
+| `compute_all()` | 所有指标（基础版，约30个） | data |
+| `compute_all_factors()` | 所有因子（完整版，120+个）⭐ | data |
+
+#### compute_all_factors() 包含的因子
+
+**趋势类因子**
+- `ma5/10/20/30/60/120` - 多周期移动平均线
+- `ema5/10/20/30/60/120` - 指数移动平均
+- `ma5_10_diff`, `ma10_20_diff` - 均线差值
+- `ma5_10_ratio`, `ma10_20_ratio` - 均线比值
+- `macd`, `macd_signal`, `macd_hist` - MACD指标
+- `macd_golden_cross`, `macd_dead_cross` - MACD金叉/死叉信号
+- `adx14`, `plus_di14`, `minus_di14` - ADX平均趋向指数
+- `tenkan_sen`, `kijun_sen`, `ichimoku_cloud` - 一目均衡表
+- `ichimoku_golden_cross` - 一目金叉信号
+
+**动量类因子**
+- `rsi6/12/14/24` - 多周期RSI
+- `kdj_k`, `kdj_d`, `kdj_j` - KDJ指标
+- `kdj_golden_cross` - KDJ金叉信号
+- `cci20` - 商品通道指数
+- `wr14` - 威廉指标
+- `mom10/20` - 动量因子
+- `roc10/20` - 变化率
+
+**波动率类因子**
+- `boll_upper_20/60`, `boll_middle_20/60`, `boll_lower_20/60` - 布林带
+- `boll_width_20/60` - 布林带宽度
+- `boll_position_20/60` - 布林带位置
+- `atr14/20` - 平均真实波幅
+- `atr_ratio_14/20` - ATR比率
+- `volatility_5/10/20/60` - 历史波动率
+- `dc_upper_20`, `dc_lower_20`, `dc_middle_20`, `dc_width_20` - 唐奇安通道
+- `tr` - 真实波幅
+- `amplitude`, `amplitude_ma5/10/20` - 振幅因子
+
+**量价类因子**
+- `volume_ma5/10/20` - 成交量移动平均
+- `volume_ratio` - 量比
+- `volume_change` - 成交量变化率
+- `price_volume_corr` - 价格成交量相关性
+- `obv` - 能量潮
+- `mfi14` - 资金流量指标
+- `pvt` - 价量趋势
+- `turnover` - 换手率
+- `amount`, `amount_ma5/10/20` - 成交额
+- `amount_change` - 成交额变化率
+
+**形态类因子**
+- `upper_shadow`, `lower_shadow` - 上下影线
+- `body` - K线实体
+- `price_position_20/60` - 价格位置
+- `consecutive_up`, `consecutive_down` - 连涨连跌天数
+
+**统计类因子**
+- `returns`, `log_returns` - 收益率
+- `returns_mean_5/10/20` - 收益率均值
+- `returns_std_5/10/20` - 收益率标准差
+- `returns_skew_5/10/20` - 收益率偏度
+- `returns_kurt_5/10/20` - 收益率峰度
+- `drawdown_20/60` - 最大回撤
+
+**复合信号因子**
+- `ma_bull` - 均线多头排列
+- `ma_bear` - 均线空头排列
+- `trend_strength` - 趋势强度
+- `momentum5/10/20/60` - 价格动量
+- `price_change_5/10/20/60` - 价格变化率
 
 ### BacktestAPI
 
@@ -468,10 +585,14 @@ data = api.data.get_stock_data(
 )
 print(f"获取到 {len(data)} 条数据")
 
-# 3. 计算因子
-print("\n=== 计算技术指标 ===")
-data = api.factors.compute_all(data)
-print("指标计算完成")
+# 3. 计算因子（使用完整版，120+个因子）
+print("\n=== 计算所有策略因子 ===")
+data = api.factors.compute_all_factors(data)
+print(f"共计算 {len(data.columns)} 个因子")
+
+# 查看部分因子
+print("\n部分因子预览:")
+print(data[['ma5', 'ma20', 'rsi14', 'macd', 'boll_width_20', 'adx14', 'cci20', 'mfi14']].tail())
 
 # 4. 创建策略
 print("\n=== 创建策略 ===")
@@ -499,10 +620,19 @@ print("\n=== 训练预测模型 ===")
 train_data = data[data.index < '2024-09-01']
 test_data = data[data.index >= '2024-09-01']
 
+# 使用更多因子进行机器学习训练
 predictor = api.ml.train(
     train_data,
     target='close',
-    features=['ma5', 'ma20', 'rsi6', 'macd', 'volume_ratio'],
+    features=[
+        'ma5', 'ma20', 'ma60',
+        'rsi6', 'rsi14',
+        'macd', 'macd_hist',
+        'boll_width_20', 'boll_position_20',
+        'adx14', 'cci20',
+        'volume_ratio', 'turnover', 'mfi14',
+        'mom10', 'roc10'
+    ],
     model_type='random_forest'
 )
 
