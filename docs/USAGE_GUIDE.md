@@ -74,6 +74,170 @@ print(data.head())
 
 ---
 
+## 数据源选择
+
+Quant Assistant 支持多种数据源：
+
+| 数据源 | 特点 | 适用场景 |
+|--------|------|----------|
+| **AKShare** | 免费开源，数据全面 | 历史数据获取、批量下载 |
+| **EFinance** | 细粒度、实时性强 | 实时行情、分钟级数据、分笔数据 |
+
+### 使用 EFinance 获取细粒度数据 ⭐
+
+```python
+from quant_assistant.data import EFinanceFetcher
+
+# 创建 EFinance 获取器
+ef = EFinanceFetcher()
+
+# 检查是否可用
+if ef.is_available():
+    # 获取实时行情
+    realtime = ef.get_realtime_quotes(['300751'])
+    print(realtime[['symbol', 'close', 'change_percent', 'volume_ratio']])
+    
+    # 获取分钟级数据（1分钟）
+    minute_data = ef.get_minute_data('300751', period=1)
+    print(minute_data.head())
+    
+    # 获取5分钟数据
+    df_5min = ef.get_minute_data('300751', period=5, start='2024-01-01')
+    
+    # 获取分笔数据（tick级）
+    tick_data = ef.get_tick_data('300751')
+    print(f"今日分笔数据: {len(tick_data)} 笔")
+    
+    # 获取当日分时数据
+    intraday = ef.get_intraday_data('300751', freq='1min')
+```
+
+---
+
+## EFinance 详细使用指南 ⭐
+
+EFinance 数据源提供细粒度、高时效性的股票数据，适合实时交易和短线策略。
+
+### 安装依赖
+
+```bash
+pip install efinance
+```
+
+### 实时行情数据
+
+```python
+from quant_assistant.data import EFinanceFetcher
+
+ef = EFinanceFetcher()
+
+# 获取全市场实时行情（约5000+股票）
+all_stocks = ef.get_realtime_quotes()
+print(f"全市场股票: {len(all_stocks)} 只")
+
+# 获取指定股票实时行情
+realtime = ef.get_realtime_quotes(['300751', '000001', '600519'])
+print(realtime[['symbol', 'name', 'close', 'change_percent', 
+                'volume', 'turnover', 'pe', 'volume_ratio']])
+
+# 筛选涨幅超过5%的股票
+rising = realtime[realtime['change_percent'] > 5]
+print(f"涨幅超过5%: {len(rising)} 只")
+```
+
+### 分钟级历史数据
+
+```python
+# 获取1分钟数据（适合日内策略）
+df_1min = ef.get_minute_data('300751', period=1, 
+                              start='2024-01-01', end='2024-01-31')
+print(f"1分钟数据: {len(df_1min)} 条")
+
+# 获取5分钟数据
+df_5min = ef.get_minute_data('300751', period=5)
+
+# 获取15分钟数据
+df_15min = ef.get_minute_data('300751', period=15)
+
+# 获取30分钟数据
+df_30min = ef.get_minute_data('300751', period=30)
+
+# 获取60分钟数据
+df_60min = ef.get_minute_data('300751', period=60)
+
+# 计算分钟级因子
+from quant_assistant import QuantAPI
+api = QuantAPI()
+df_5min_with_factors = api.factors.compute_all_factors(df_5min)
+```
+
+### 分笔数据（Tick级）
+
+```python
+# 获取今日分笔数据
+tick_today = ef.get_tick_data('300751')
+print(f"今日分笔: {len(tick_today)} 笔")
+
+# 获取指定日期分笔数据
+tick_history = ef.get_tick_data('300751', date='2024-01-15')
+
+# 分析大单
+big_orders = tick_history[tick_history['volume'] >= 100000]  # 10万股以上
+print(f"大单数量: {len(big_orders)}")
+
+# 计算资金流向
+buy_volume = tick_history[tick_history['direction'] == '买盘']['volume'].sum()
+sell_volume = tick_history[tick_history['direction'] == '卖盘']['volume'].sum()
+net_inflow = buy_volume - sell_volume
+print(f"净流入: {net_inflow} 股")
+```
+
+### 当日分时数据
+
+```python
+# 获取当日1分钟分时数据
+intraday_1min = ef.get_intraday_data('300751', freq='1min')
+
+# 获取当日5分钟分时数据
+intraday_5min = ef.get_intraday_data('300751', freq='5min')
+
+# 实时监控
+import time
+while True:
+    latest = ef.get_intraday_data('300751', freq='1min')
+    current = latest.iloc[-1]
+    print(f"时间: {current['datetime']}, 价格: {current['close']}, "
+          f"成交量: {current['volume']}")
+    time.sleep(60)  # 每分钟更新
+```
+
+### 财务数据
+
+```python
+# 获取财务报表（季报）
+financial = ef.get_financial_data('300751', report_type='quarterly')
+print(financial[['report_date', 'eps', 'roe', 'revenue', 'net_profit']])
+
+# 获取年报
+annual = ef.get_financial_data('300751', report_type='annual')
+```
+
+### 板块数据
+
+```python
+# 获取行业板块
+industry = ef.get_sector_data('industry')
+print(industry[['name', 'change_percent', 'volume']].head(10))
+
+# 获取概念板块
+concept = ef.get_sector_data('concept')
+
+# 获取地域板块
+area = ef.get_sector_data('area')
+```
+
+---
+
 ## 数据获取
 
 ### 获取股票列表
@@ -547,6 +711,22 @@ api.ml        # 机器学习
 - `trend_strength` - 趋势强度
 - `momentum5/10/20/60` - 价格动量
 - `price_change_5/10/20/60` - 价格变化率
+
+### EFinanceFetcher ⭐
+
+EFinance 数据源，提供细粒度、高时效性数据。
+
+| 方法 | 说明 | 参数 |
+|------|------|------|
+| `is_available()` | 检查是否可用 | - |
+| `get_realtime_quotes()` | 实时行情 | symbols |
+| `get_minute_data()` | 分钟级数据 | symbol, period, adjust, start, end |
+| `get_tick_data()` | 分笔数据 | symbol, date |
+| `get_daily_data()` | 日K数据 | symbol, adjust, start, end |
+| `get_intraday_data()` | 当日分时 | symbol, freq |
+| `get_stock_list()` | 股票列表 | market |
+| `get_financial_data()` | 财务数据 | symbol, report_type |
+| `get_sector_data()` | 板块数据 | sector_type |
 
 ### BacktestAPI
 
