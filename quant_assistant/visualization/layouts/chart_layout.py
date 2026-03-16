@@ -9,7 +9,7 @@ from ..renderers.base_renderer import BaseRenderer
 from ..renderers.ascii_renderer import ASCIIRenderer, SimpleTableRenderer
 from ..indicators.engine import IndicatorEngine
 from ..adapters.data_adapter import DataAdapter
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

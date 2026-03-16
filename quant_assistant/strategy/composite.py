@@ -7,8 +7,8 @@ from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 
-from src.strategy.base import BaseStrategy, Signal, SignalType, Bar, StrategyContext
-from src.utils.logger import get_logger
+from quant_assistant.strategy.base import BaseStrategy, Signal, SignalType, Bar, StrategyContext
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

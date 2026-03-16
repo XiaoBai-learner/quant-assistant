@@ -5,7 +5,7 @@
 from typing import Dict, Any, List
 import pandas as pd
 
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

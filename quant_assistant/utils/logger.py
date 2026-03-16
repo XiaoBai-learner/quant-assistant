@@ -5,7 +5,7 @@ import os
 import sys
 from loguru import logger
 
-from src.config import log_config
+from quant_assistant.config import log_config
 
 
 def setup_logging():

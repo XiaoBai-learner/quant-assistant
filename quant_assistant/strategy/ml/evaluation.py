@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from dataclasses import dataclass
 
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

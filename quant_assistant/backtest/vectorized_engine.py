@@ -9,9 +9,9 @@ from datetime import date
 import pandas as pd
 import numpy as np
 
-from src.backtest.engine import BacktestConfig
-from src.strategy.base import SignalType
-from src.utils.logger import get_logger
+from quant_assistant.backtest.engine import BacktestConfig
+from quant_assistant.strategy.base import SignalType
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

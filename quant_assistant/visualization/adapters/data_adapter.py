@@ -7,7 +7,7 @@ import numpy as np
 from typing import Optional, Literal
 from datetime import datetime
 
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

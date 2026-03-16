@@ -8,7 +8,7 @@ from datetime import datetime, date
 
 from .base import Factor, FactorResult
 from .registry import factor_registry
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -8,8 +8,8 @@ from datetime import datetime
 from enum import Enum
 import random
 
-from src.backtest.broker import Broker, Order, Trade, OrderType, OrderSide, OrderStatus
-from src.utils.logger import get_logger
+from quant_assistant.backtest.broker import Broker, Order, Trade, OrderType, OrderSide, OrderStatus
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -11,7 +11,7 @@ import pickle
 
 from .models import ModelRegistry, model_registry, ModelStatus
 from .features import FeaturePipeline
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Type
 import json
 
 from .base import Factor, FactorMetadata
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -8,7 +8,7 @@ import numpy as np
 from datetime import datetime
 
 from .strategy_builder import StrategyRule, LogicOp
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -2,23 +2,23 @@
 服务注册和启动模块
 配置依赖注入容器，注册所有服务
 """
-from src.core.container import get_container, register_type, register_instance
-from src.core.interfaces import (
+from quant_assistant.core.container import get_container, register_type, register_instance
+from quant_assistant.core.interfaces import (
     IBroker, IPortfolio, IPerformanceAnalyzer,
     IDataFetcher, IDataStorage, IDataValidator,
     IStrategy, IRiskManager
 )
 
 # 导入具体实现
-from src.backtest.broker import Broker
-from src.backtest.portfolio import Portfolio
-from src.backtest.performance import PerformanceAnalyzer
-from src.backtest.engine import BacktestConfig
-from src.data.fetcher.akshare_fetcher import AKShareFetcher
-from src.data.storage.mysql_storage import MySQLStorage
-from src.data.validator import DataValidator
-from src.risk.manager import RiskManager
-from src.config_manager import Config, get_config
+from quant_assistant.backtest.broker import Broker
+from quant_assistant.backtest.portfolio import Portfolio
+from quant_assistant.backtest.performance import PerformanceAnalyzer
+from quant_assistant.backtest.engine import BacktestConfig
+from quant_assistant.data.fetcher.akshare_fetcher import AKShareFetcher
+from quant_assistant.data.storage.mysql_storage import MySQLStorage
+from quant_assistant.data.validator import DataValidator
+from quant_assistant.risk.manager import RiskManager
+from quant_assistant.config_manager import Config, get_config
 
 
 def register_services():
@@ -61,7 +61,7 @@ def create_backtest_engine(config: BacktestConfig) -> 'BacktestEngine':
     Returns:
         BacktestEngine: 配置好的回测引擎
     """
-    from src.backtest.engine import BacktestEngine
+    from quant_assistant.backtest.engine import BacktestEngine
     
     container = get_container()
     

@@ -10,14 +10,14 @@ from datetime import datetime, date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.fetcher.akshare_fetcher import AKShareFetcher
-from src.storage.mysql_storage import MySQLStorage
-from src.query.data_query import DataQueryEngine
-from src.database.connection import db_manager
-from src.utils.logger import setup_logging
-from src.visualization.layouts.chart_layout import ChartLayout
-from src.visualization.indicators.moving_average import MAIndicator
-from src.visualization.indicators.macd import MACDIndicator
+from quant_assistant.data.fetcher.akshare_fetcher import AKShareFetcher
+from quant_assistant.data.storage.mysql_storage import MySQLStorage
+from quant_assistant.data.query.data_query import DataQueryEngine
+from quant_assistant.data.database.connection import db_manager
+from quant_assistant.utils.logger import setup_logging
+from quant_assistant.visualization.layouts.chart_layout import ChartLayout
+from quant_assistant.visualization.indicators.moving_average import MAIndicator
+from quant_assistant.visualization.indicators.macd import MACDIndicator
 
 
 def init_database():
@@ -57,7 +57,7 @@ def update_daily_data(symbol: str = None, start_date: str = None, end_date: str 
     if symbol:
         symbols = [symbol]
     else:
-        from src.config import data_config
+        from quant_assistant.config import data_config
         symbols = data_config.default_symbols
     
     for sym in symbols:
@@ -69,7 +69,7 @@ def update_daily_data(symbol: str = None, start_date: str = None, end_date: str 
                     start = last_date + timedelta(days=1)
                     start_date = start.strftime('%Y-%m-%d')
                 else:
-                    from src.config import data_config
+                    from quant_assistant.config import data_config
                     start_date = data_config.history_start_date
             
             df = fetcher.get_daily_quotes(sym, start_date, end_date)

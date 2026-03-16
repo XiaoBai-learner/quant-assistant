@@ -2,12 +2,16 @@
 核心接口定义
 使用 Protocol 定义模块间的契约接口
 """
-from typing import Protocol, List, Optional, Dict, Any
+try:
+    from typing import Protocol, List, Optional, Dict, Any
+except ImportError:
+    from typing_extensions import Protocol
+    from typing import List, Optional, Dict, Any
 from datetime import date
 import pandas as pd
 
-from src.backtest.broker import Order, Trade
-from src.strategy.base import Signal, Bar
+from quant_assistant.backtest.broker import Order, Trade
+from quant_assistant.strategy.base import Signal, Bar
 
 
 # ==================== 数据层接口 ====================

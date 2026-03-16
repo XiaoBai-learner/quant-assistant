@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 
 from .strategy_builder import StrategyRule, Condition, Operator
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

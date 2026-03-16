@@ -2,7 +2,11 @@
 回测引擎
 事件驱动的回测核心，支持依赖注入
 """
-from typing import Dict, List, Any, Optional, Callable, Protocol
+try:
+    from typing import Protocol, Dict, List, Any, Optional, Callable
+except ImportError:
+    from typing_extensions import Protocol
+    from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, date
 from enum import Enum
@@ -12,8 +16,8 @@ import numpy as np
 from .broker import Broker, Order, OrderType, OrderSide
 from .portfolio import Portfolio
 from .performance import PerformanceAnalyzer
-from src.strategy.base import BaseStrategy, Bar, StrategyContext, Signal
-from src.utils.logger import get_logger
+from quant_assistant.strategy.base import BaseStrategy, Bar, StrategyContext, Signal
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

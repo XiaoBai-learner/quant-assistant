@@ -21,17 +21,18 @@
     >>> tick_data = fetcher.get_tick_data('300751')
 """
 
-from quant_assistant.data.fetcher import DataFetcher, EFinanceFetcher
+from quant_assistant.data.fetcher import BaseDataFetcher, AKShareFetcher, EFinanceFetcher
 from quant_assistant.data.storage import MySQLStorage
-from quant_assistant.data.query import DataQuery
-from quant_assistant.data.cache import CacheManager
-from quant_assistant.data.validator import DataValidator
+from quant_assistant.data.query import DataQueryEngine
+from quant_assistant.data.cache import DataCache, MemoryCache, CacheEntry
 
 __all__ = [
-    'DataFetcher',
+    'BaseDataFetcher',
+    'AKShareFetcher',
     'EFinanceFetcher',
     'MySQLStorage',
-    'DataQuery',
-    'CacheManager',
-    'DataValidator',
+    'DataQueryEngine',
+    'DataCache',
+    'MemoryCache',
+    'CacheEntry',
 ]

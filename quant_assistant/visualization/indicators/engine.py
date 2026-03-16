@@ -8,7 +8,7 @@ import pandas as pd
 from .base import BaseIndicator, IndicatorResult
 from .moving_average import MAIndicator
 from .macd import MACDIndicator
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

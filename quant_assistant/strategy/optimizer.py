@@ -11,9 +11,9 @@ import itertools
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import logging
 
-from src.strategy.base import BaseStrategy
-from src.backtest.engine import BacktestEngine, BacktestConfig
-from src.utils.logger import get_logger
+from quant_assistant.strategy.base import BaseStrategy
+from quant_assistant.backtest.engine import BacktestEngine, BacktestConfig
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

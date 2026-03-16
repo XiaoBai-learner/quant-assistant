@@ -8,7 +8,7 @@ import numpy as np
 
 from .base_renderer import BaseRenderer
 from ..indicators.base import IndicatorResult
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

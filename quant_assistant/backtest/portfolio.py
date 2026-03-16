@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import date
 
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

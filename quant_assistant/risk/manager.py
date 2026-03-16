@@ -7,9 +7,9 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from enum import Enum
 
-from src.strategy.base import Signal
-from src.backtest.broker import Order
-from src.utils.logger import get_logger
+from quant_assistant.strategy.base import Signal
+from quant_assistant.backtest.broker import Order
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
