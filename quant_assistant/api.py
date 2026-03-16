@@ -97,8 +97,8 @@ class DataAPI:
     def _get_fetcher(self):
         """懒加载数据获取器"""
         if self._fetcher is None:
-            from quant_assistant.data.fetcher import DataFetcher
-            self._fetcher = DataFetcher()
+            from quant_assistant.data.fetcher import EFinanceFetcher
+            self._fetcher = EFinanceFetcher()
         return self._fetcher
     
     def _get_storage(self):
@@ -111,8 +111,8 @@ class DataAPI:
     def _get_query(self):
         """懒加载查询器"""
         if self._query is None:
-            from quant_assistant.data.query import DataQuery
-            self._query = DataQuery()
+            from quant_assistant.data.query import DataQueryEngine
+            self._query = DataQueryEngine()
         return self._query
     
     def get_stock_data(
@@ -140,13 +140,16 @@ class DataAPI:
             >>> data = api.data.get_stock_data('300751', start='2024-01-01')
         """
         fetcher = self._get_fetcher()
-        return fetcher.get_stock_data(
-            symbol=symbol,
-            start_date=start,
-            end_date=end,
-            period=period,
-            adjust=adjust
-        )
+        # 根据 period 选择不同的方法
+        if period == 'daily':
+            return fetcher.get_daily_data(
+                symbol=symbol,
+                start=start,
+                end=end,
+                adjust=adjust
+            )
+        else:
+            raise ValueError(f"不支持的数据周期: {period}")
     
     def get_stock_list(self, market: str = 'all') -> pd.DataFrame:
         """
