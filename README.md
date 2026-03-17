@@ -22,7 +22,12 @@
 │  数据管理层 (Data Manager) ✅ Phase 1 已完成                  │
 │  ┌──────────┬──────────┬──────────┬──────────┐             │
 │  │  Fetcher │ Storage  │  Query   │  Cache   │             │
-│  │ (AKShare)│ (MySQL)  │ (Engine) │ (Redis)  │             │
+│  │(多数据源)│ (MySQL)  │ (Engine) │ (Redis)  │             │
+│  ├──────────┤          │          │          │             │
+│  │•AKShare  │          │          │          │             │
+│  │•EFinance │          │          │          │             │
+│  │•TickFlow │          │          │          │             │
+│  │ (免费/付)│          │          │          │             │
 │  └──────────┴──────────┴──────────┴──────────┘             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -30,7 +35,12 @@
 ## 📦 功能模块
 
 ### Phase 1: 数据管理层 ✅ (已完成)
-- [x] 多数据源接入 (AKShare)
+- [x] 多数据源接入
+  - [x] AKShare - 免费开源数据
+  - [x] EFinance - 实时行情数据
+  - [x] **TickFlow** - 稳定行情数据服务 (新增)
+    - 免费版: 日K线、财务数据、标的信息（无需API Key）
+    - 付费版: 分钟级K线、实时行情（需要API Key）
 - [x] MySQL 数据存储
 - [x] 统一查询接口
 - [x] 数据质量校验
@@ -173,6 +183,33 @@ result = api.backtest.run(strategy, data)
 # 查看回测结果
 analysis = api.backtest.analyze(result)
 print(f"总收益率: {analysis['total_return']*100:.2f}%")
+```
+
+### 使用 TickFlow 数据源
+
+```python
+from quant_assistant.data import TickFlowFetcher
+
+# 免费版（无需 API Key）
+fetcher = TickFlowFetcher()
+
+# 获取日线数据
+df = fetcher.get_daily_quotes('600000.SH', start_date='2024-01-01')
+
+# 获取股票列表
+stocks = fetcher.get_stock_list('SH')  # 上交所股票
+
+# 获取财务数据
+financials = fetcher.get_financial_indicators('600000.SH')
+
+# 付费版（需要 API Key）
+fetcher_paid = TickFlowFetcher(api_key='your-api-key', use_paid=True)
+
+# 获取分钟级数据（付费版功能）
+minute_df = fetcher_paid.get_minute_quotes('600000.SH', period='5m')
+
+# 获取实时行情（付费版功能）
+realtime = fetcher_paid.get_realtime_quotes(['600000.SH', '000001.SZ'])
 ```
 
 ### 命令行工具
