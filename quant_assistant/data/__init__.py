@@ -9,19 +9,27 @@
     - TickFlow: 稳定行情数据服务，支持免费/付费版
       * 免费版: 日K线、财务数据、标的信息（无需API Key）
       * 付费版: 分钟级K线、实时行情（需要API Key）
+    
+推荐使用 UnifiedDataFetcher（统一数据获取器）:
+    - 整合 AKShare、EFinance、TickFlow 多个数据源
+    - 支持配置化数据源选择
+    - 支持故障自动切换
+    - 统一对外接口
 
 示例:
-    >>> from quant_assistant.data import DataFetcher, EFinanceFetcher, MySQLStorage
+    >>> from quant_assistant.data import UnifiedDataFetcher, DataSourceType
+    >>> 
+    >>> # 使用统一数据获取器（推荐）
+    >>> fetcher = UnifiedDataFetcher()  # 默认 AKShare 为主
+    >>> df = fetcher.get_daily_quotes('600000', start_date='2024-01-01')
+    >>> 
+    >>> # 指定 TickFlow 为主数据源
+    >>> fetcher = UnifiedDataFetcher(primary_source='tickflow')
     >>> 
     >>> # 使用 EFinance 获取实时数据
-    >>> fetcher = EFinanceFetcher()
-    >>> realtime = fetcher.get_realtime_quotes(['300751'])
-    >>> 
-    >>> # 获取分钟级数据
-    >>> minute_data = fetcher.get_minute_data('300751', period=5)
-    >>> 
-    >>> # 获取分笔数据
-    >>> tick_data = fetcher.get_tick_data('300751')
+    >>> from quant_assistant.data import EFinanceFetcher
+    >>> ef = EFinanceFetcher()
+    >>> realtime = ef.get_realtime_quotes(['300751'])
     >>> 
     >>> # 使用 TickFlow 免费版获取日K线
     >>> from quant_assistant.data import TickFlowFetcher
@@ -33,18 +41,38 @@
     >>> minute = tickflow_paid.get_minute_quotes('600000.SH', period='5m')
 """
 
-from quant_assistant.data.fetcher import BaseDataFetcher, AKShareFetcher, EFinanceFetcher, TickFlowFetcher
+from quant_assistant.data.fetcher import (
+    BaseDataFetcher,
+    AKShareFetcher,
+    EFinanceFetcher,
+    TickFlowFetcher,
+    UnifiedDataFetcher,  # 统一数据获取器（推荐）
+    DataSourceType,
+)
 from quant_assistant.data.storage import MySQLStorage
 from quant_assistant.data.query import DataQueryEngine
 from quant_assistant.data.cache import DataCache, MemoryCache, CacheEntry
 
+# 为向后兼容保留别名
+DataFetcher = UnifiedDataFetcher
+
 __all__ = [
+    # 数据获取器 - 统一数据获取器（推荐）
+    'UnifiedDataFetcher',
+    'DataFetcher',  # 别名，向后兼容
+    'DataSourceType',
+    
+    # 数据获取器 - 特定数据源
     'BaseDataFetcher',
     'AKShareFetcher',
     'EFinanceFetcher',
     'TickFlowFetcher',
+    
+    # 存储和查询
     'MySQLStorage',
     'DataQueryEngine',
+    
+    # 缓存
     'DataCache',
     'MemoryCache',
     'CacheEntry',
