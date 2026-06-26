@@ -62,8 +62,8 @@
 
 **使用示例**:
 ```python
-from src.backtest import BacktestEngine, BacktestConfig
-from src.strategy import MyStrategy
+from quant_assistant.backtest import BacktestEngine, BacktestConfig
+from quant_assistant.strategy import MyStrategy
 
 config = BacktestConfig(
     start_date=date(2024, 1, 1),

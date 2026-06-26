@@ -97,8 +97,8 @@ class DataAPI:
     def _get_fetcher(self):
         """懒加载数据获取器"""
         if self._fetcher is None:
-            from quant_assistant.data.fetcher import EFinanceFetcher
-            self._fetcher = EFinanceFetcher()
+            from quant_assistant.data.fetcher import UnifiedDataFetcher
+            self._fetcher = UnifiedDataFetcher(primary_source='auto')
         return self._fetcher
     
     def _get_storage(self):
@@ -114,6 +114,57 @@ class DataAPI:
             from quant_assistant.data.query import DataQueryEngine
             self._query = DataQueryEngine()
         return self._query
+
+    def set_fetcher(self, fetcher) -> None:
+        """设置自定义数据获取器，便于切换数据源或测试注入。"""
+        self._fetcher = fetcher
+
+    def set_query(self, query) -> None:
+        """设置自定义查询引擎。"""
+        self._query = query
+
+    def _format_date(self, value: Optional[Union[str, date]]) -> Optional[str]:
+        """统一将日期参数转换为 YYYY-MM-DD 字符串。"""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.date().isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        return value
+
+    def _standardize_price_data(
+        self,
+        df: pd.DataFrame,
+        symbol: str,
+        start: Optional[str] = None,
+        end: Optional[str] = None
+    ) -> pd.DataFrame:
+        """标准化行情字段，降低不同数据源之间的差异。"""
+        if df is None:
+            return pd.DataFrame()
+        result = df.copy()
+        original_rows = len(result)
+        rename_map = {
+            'date': 'trade_date',
+            'datetime': 'trade_datetime',
+            'change_percent': 'pct_change',
+        }
+        result = result.rename(columns={k: v for k, v in rename_map.items() if k in result.columns})
+        if 'trade_date' in result.columns:
+            result['trade_date'] = pd.to_datetime(result['trade_date'])
+            if start:
+                result = result[result['trade_date'] >= pd.Timestamp(start)]
+            if end:
+                result = result[result['trade_date'] <= pd.Timestamp(end)]
+            if original_rows > 0 and result.empty and (start or end):
+                raise ValueError(
+                    f"{symbol} 请求区间内无可用行情数据: "
+                    f"{start or '最早'} ~ {end or '最新'}"
+                )
+        if 'symbol' not in result.columns:
+            result['symbol'] = symbol
+        return result
     
     def get_stock_data(
         self,
@@ -140,13 +191,36 @@ class DataAPI:
             >>> data = api.data.get_stock_data('300751', start='2024-01-01')
         """
         fetcher = self._get_fetcher()
-        # 根据 period 选择不同的方法
+        start_date = self._format_date(start)
+        end_date = self._format_date(end)
+
         if period == 'daily':
-            return fetcher.get_daily_data(
+            if hasattr(fetcher, 'get_daily_quotes'):
+                df = fetcher.get_daily_quotes(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust=adjust
+                )
+            elif hasattr(fetcher, 'get_daily_data'):
+                df = fetcher.get_daily_data(
+                    symbol=symbol,
+                    start=start_date,
+                    end=end_date,
+                    adjust=adjust
+                )
+            else:
+                raise AttributeError("当前数据获取器不支持日线行情接口")
+            return self._standardize_price_data(df, symbol, start_date, end_date)
+        elif period in {'minute', '1m', '5m', '15m', '30m', '60m'}:
+            if not hasattr(fetcher, 'get_minute_quotes'):
+                raise ValueError("当前数据源不支持分钟级数据")
+            minute_period = '5m' if period == 'minute' else period
+            return fetcher.get_minute_quotes(
                 symbol=symbol,
-                start=start,
-                end=end,
-                adjust=adjust
+                period=minute_period,
+                start_date=start_date,
+                end_date=end_date
             )
         else:
             raise ValueError(f"不支持的数据周期: {period}")
@@ -162,7 +236,11 @@ class DataAPI:
             DataFrame 包含股票基础信息
         """
         fetcher = self._get_fetcher()
-        return fetcher.get_stock_list(market=market)
+        try:
+            return fetcher.get_stock_list(market=market)
+        except TypeError:
+            exchange = None if market == 'all' else market.upper()
+            return fetcher.get_stock_list(exchange=exchange)
     
     def get_financial_data(
         self,
@@ -180,7 +258,11 @@ class DataAPI:
             DataFrame 包含财务指标
         """
         fetcher = self._get_fetcher()
-        return fetcher.get_financial_data(symbol, report_type)
+        if hasattr(fetcher, 'get_financial_data'):
+            return fetcher.get_financial_data(symbol, report_type)
+        if hasattr(fetcher, 'get_financial_indicators'):
+            return fetcher.get_financial_indicators(symbol)
+        raise AttributeError("当前数据获取器不支持财务数据接口")
     
     def save(self, data: pd.DataFrame, table: str, **kwargs) -> bool:
         """
@@ -218,13 +300,17 @@ class DataAPI:
             DataFrame 查询结果
         """
         query = self._get_query()
-        return query.query(
-            table=table,
-            symbol=symbol,
-            start=start,
-            end=end,
-            **filters
-        )
+        if hasattr(query, 'query'):
+            return query.query(
+                table=table,
+                symbol=symbol,
+                start=start,
+                end=end,
+                **filters
+            )
+        if table == 'daily_quotes':
+            return query.get_price_data(symbol=symbol, start_date=start, end_date=end, **filters)
+        raise AttributeError(f"当前查询引擎不支持通用 query 接口，无法查询表: {table}")
 
 
 class FactorAPI:
@@ -466,12 +552,23 @@ class BacktestAPI:
         self._api = api
         self._engine = None
     
-    def _get_engine(self):
-        """懒加载回测引擎"""
-        if self._engine is None:
-            from quant_assistant.backtest.engine import BacktestEngine
-            self._engine = BacktestEngine()
-        return self._engine
+    def _prepare_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        """准备回测数据索引和必要字段。"""
+        prepared = data.copy()
+        if 'trade_date' in prepared.columns:
+            prepared['trade_date'] = pd.to_datetime(prepared['trade_date'])
+            prepared = prepared.set_index('trade_date')
+        elif 'date' in prepared.columns:
+            prepared['date'] = pd.to_datetime(prepared['date'])
+            prepared = prepared.set_index('date')
+        elif not isinstance(prepared.index, pd.DatetimeIndex):
+            raise ValueError("回测数据需要 DatetimeIndex，或包含 trade_date/date 列")
+
+        required = {'open', 'high', 'low', 'close', 'volume'}
+        missing = required - set(prepared.columns)
+        if missing:
+            raise ValueError(f"回测数据缺少必要字段: {', '.join(sorted(missing))}")
+        return prepared.sort_index()
     
     def run(
         self,
@@ -494,14 +591,29 @@ class BacktestAPI:
         Returns:
             回测结果字典
         """
-        engine = self._get_engine()
-        return engine.run(
-            strategy=strategy,
-            data=data,
-            initial_capital=initial_capital,
-            commission=commission,
-            slippage=slippage
+        from quant_assistant.backtest.engine import BacktestEngine, BacktestConfig
+
+        prepared = self._prepare_data(data)
+        if prepared.empty:
+            raise ValueError("回测数据为空")
+
+        symbol = (
+            str(prepared['symbol'].iloc[0])
+            if 'symbol' in prepared.columns and not prepared['symbol'].empty
+            else 'UNKNOWN'
         )
+        config = BacktestConfig(
+            start_date=prepared.index.min().date(),
+            end_date=prepared.index.max().date(),
+            initial_cash=initial_capital,
+            commission_rate=commission,
+            slippage=slippage,
+        )
+        engine = BacktestEngine(config)
+        engine.set_strategy(strategy)
+        engine.load_data(symbol, prepared)
+        self._engine = engine
+        return engine.run()
     
     def analyze(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -513,9 +625,13 @@ class BacktestAPI:
         Returns:
             绩效指标
         """
-        from quant_assistant.backtest.performance import PerformanceAnalyzer
-        analyzer = PerformanceAnalyzer()
-        return analyzer.analyze(result)
+        metrics = dict(result.get('metrics', {}))
+        for key in ('total_return', 'sharpe_ratio', 'max_drawdown', 'win_rate'):
+            if key in result and key not in metrics:
+                metrics[key] = result[key]
+        if 'daily_records' in result and not result['daily_records'].empty:
+            metrics.setdefault('final_value', result['daily_records']['total_value'].iloc[-1])
+        return metrics
 
 
 class MLAPI:

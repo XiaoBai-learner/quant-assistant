@@ -66,6 +66,36 @@ class DataQueryEngine:
             df = df[[col for col in available_fields if col in df.columns]]
         
         return df
+
+    def query(
+        self,
+        table: str,
+        symbol: Optional[str] = None,
+        start: Optional[Union[str, date]] = None,
+        end: Optional[Union[str, date]] = None,
+        **filters
+    ) -> pd.DataFrame:
+        """
+        通用查询入口，供高层 API 和 CLI 使用。
+
+        当前覆盖最常用的股票列表和日线行情查询；更复杂的表可以后续扩展。
+        """
+        if table == 'daily_quotes':
+            if not symbol:
+                raise ValueError("查询 daily_quotes 时必须提供 symbol")
+            fields = filters.pop('fields', None)
+            return self.get_price_data(
+                symbol=symbol,
+                start_date=start,
+                end_date=end,
+                fields=fields
+            )
+        if table == 'stocks':
+            df = self.storage.get_stock_list()
+            if symbol:
+                df = df[df['symbol'] == symbol]
+            return df
+        raise ValueError(f"不支持的查询表: {table}")
     
     def get_latest_price(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取最新价格"""

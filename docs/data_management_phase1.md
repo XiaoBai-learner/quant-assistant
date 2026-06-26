@@ -208,7 +208,7 @@ CREATE TABLE update_logs (
 quant_project/
 ├── docs/                           # 文档
 │   └── data_management_phase1.md  # 本实施文档
-├── src/                           # 源代码
+├── quant_assistant/                           # 源代码
 │   ├── __init__.py
 │   ├── config.py                  # 配置文件
 │   ├── database/                  # 数据库模块
@@ -239,7 +239,7 @@ quant_project/
 └── main.py                        # 入口程序
 ```
 
-### 3.2 配置文件 (src/config.py)
+### 3.2 配置文件 (quant_assistant/config.py)
 
 ```python
 """
@@ -314,7 +314,7 @@ data_config = DataConfig()
 log_config = LoggingConfig()
 ```
 
-### 3.3 数据库连接管理 (src/database/connection.py)
+### 3.3 数据库连接管理 (quant_assistant/database/connection.py)
 
 ```python
 """
@@ -327,7 +327,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
-from src.config import db_config
+from quant_assistant.config import db_config
 
 
 class DatabaseManager:
@@ -394,7 +394,7 @@ class DatabaseManager:
 db_manager = DatabaseManager()
 ```
 
-### 3.4 数据模型 (src/database/models.py)
+### 3.4 数据模型 (quant_assistant/database/models.py)
 
 ```python
 """
@@ -509,7 +509,7 @@ class UpdateLog(Base):
     )
 ```
 
-### 3.5 AKShare 数据获取器 (src/fetcher/akshare_fetcher.py)
+### 3.5 AKShare 数据获取器 (quant_assistant/fetcher/akshare_fetcher.py)
 
 ```python
 """
@@ -521,8 +521,8 @@ from datetime import datetime, date
 from typing import List, Optional, Dict, Any
 import time
 
-from src.fetcher.base_fetcher import BaseDataFetcher
-from src.utils.logger import get_logger
+from quant_assistant.fetcher.base_fetcher import BaseDataFetcher
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -717,7 +717,7 @@ class AKShareFetcher(BaseDataFetcher):
             return 'UNKNOWN'
 ```
 
-### 3.6 MySQL 存储实现 (src/storage/mysql_storage.py)
+### 3.6 MySQL 存储实现 (quant_assistant/storage/mysql_storage.py)
 
 ```python
 """
@@ -730,13 +730,13 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import insert, update, delete
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
-from src.storage.base_storage import BaseStorage
-from src.database.connection import db_manager
-from src.database.models import (
+from quant_assistant.storage.base_storage import BaseStorage
+from quant_assistant.database.connection import db_manager
+from quant_assistant.database.models import (
     Stock, DailyQuote, FinancialIndicator, 
     UpdateLog, Base
 )
-from src.utils.logger import get_logger
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -981,7 +981,7 @@ class MySQLStorage(BaseStorage):
             session.add(log)
 ```
 
-### 3.7 数据查询接口 (src/query/data_query.py)
+### 3.7 数据查询接口 (quant_assistant/query/data_query.py)
 
 ```python
 """
@@ -993,8 +993,8 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional, Dict, Any, Union
 from functools import lru_cache
 
-from src.storage.mysql_storage import MySQLStorage
-from src.utils.logger import get_logger
+from quant_assistant.storage.mysql_storage import MySQLStorage
+from quant_assistant.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -1214,11 +1214,11 @@ from datetime import datetime, date, timedelta
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.fetcher.akshare_fetcher import AKShareFetcher
-from src.storage.mysql_storage import MySQLStorage
-from src.query.data_query import DataQueryEngine
-from src.database.connection import db_manager
-from src.utils.logger import setup_logging
+from quant_assistant.fetcher.akshare_fetcher import AKShareFetcher
+from quant_assistant.storage.mysql_storage import MySQLStorage
+from quant_assistant.query.data_query import DataQueryEngine
+from quant_assistant.database.connection import db_manager
+from quant_assistant.utils.logger import setup_logging
 
 
 def init_database():
@@ -1269,7 +1269,7 @@ def update_daily_data(symbol: str = None, start_date: str = None, end_date: str 
         symbols = [symbol]
     else:
         # 获取默认股票列表
-        from src.config import data_config
+        from quant_assistant.config import data_config
         symbols = data_config.default_symbols
     
     for sym in symbols:
@@ -1284,7 +1284,7 @@ def update_daily_data(symbol: str = None, start_date: str = None, end_date: str 
                     start_date = start.strftime('%Y-%m-%d')
                 else:
                     # 使用默认起始日期
-                    from src.config import data_config
+                    from quant_assistant.config import data_config
                     start_date = data_config.history_start_date
             
             # 获取数据

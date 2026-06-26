@@ -61,7 +61,7 @@
 
 **使用示例**:
 ```python
-from src.visualization.indicators import IndicatorEngine, MAIndicator
+from quant_assistant.visualization.indicators import IndicatorEngine, MAIndicator
 
 engine = IndicatorEngine()
 result = engine.calculate(df, ['MA5', 'MA10', 'MACD'])
@@ -100,7 +100,7 @@ macd_values = result['MACD'].values
 
 **使用示例**:
 ```python
-from src.visualization.renderers import ASCIIRenderer
+from quant_assistant.visualization.renderers import ASCIIRenderer
 
 renderer = ASCIIRenderer()
 chart = renderer.render_candlestick(df, width=80, height=20)
@@ -125,7 +125,7 @@ print(chart)
 
 **使用示例**:
 ```python
-from src.visualization.layouts import ChartLayout
+from quant_assistant.visualization.layouts import ChartLayout
 
 layout = ChartLayout()
 output = layout.display(
@@ -154,7 +154,7 @@ print(output)
 
 **使用示例**:
 ```python
-from src.visualization.adapters import DataAdapter
+from quant_assistant.visualization.adapters import DataAdapter
 
 adapter = DataAdapter()
 df_prepared = adapter.prepare_for_chart(df, period='W')
@@ -184,8 +184,8 @@ df_prepared = adapter.prepare_for_chart(df, period='W')
 
 ### 完整示例
 ```python
-from src.visualization import ChartLayout
-from src.data import DataQueryEngine
+from quant_assistant.visualization import ChartLayout
+from quant_assistant.data import DataQueryEngine
 
 # 查询数据
 query = DataQueryEngine()

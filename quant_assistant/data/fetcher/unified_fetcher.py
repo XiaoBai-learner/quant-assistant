@@ -20,6 +20,7 @@ import pandas as pd
 from datetime import date, timedelta
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
+import inspect
 import time
 import logging
 
@@ -33,6 +34,7 @@ logger = get_logger(__name__)
 class DataSourceType(Enum):
     """数据源类型枚举"""
     AKSHARE = "akshare"
+    EFINANCE = "efinance"
     TICKFLOW = "tickflow"
     AUTO = "auto"  # 自动选择/故障切换
 
@@ -116,6 +118,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
             tickflow_use_paid: 是否使用 TickFlow 付费版
         """
         self.akshare_fetcher = None
+        self.efinance_fetcher = None
         self.tickflow_fetcher = None
         
         # 初始化 AKShare
@@ -125,6 +128,14 @@ class UnifiedDataFetcher(BaseDataFetcher):
             logger.debug("AKShare 数据获取器初始化成功")
         except Exception as e:
             logger.warning(f"AKShare 初始化失败: {e}")
+
+        # 初始化 EFinance
+        try:
+            from quant_assistant.data.fetcher.efinance_fetcher import EFinanceFetcher
+            self.efinance_fetcher = EFinanceFetcher()
+            logger.debug("EFinance 数据获取器初始化成功")
+        except Exception as e:
+            logger.warning(f"EFinance 初始化失败: {e}")
         
         # 初始化 TickFlow
         try:
@@ -138,7 +149,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
             logger.warning(f"TickFlow 初始化失败: {e}")
         
         # 检查至少有一个数据源可用
-        if not self.akshare_fetcher and not self.tickflow_fetcher:
+        if not self.akshare_fetcher and not self.efinance_fetcher and not self.tickflow_fetcher:
             raise DataFetchException("所有数据源初始化失败，无法获取数据")
     
     def _get_fetcher(self, source_type: DataSourceType) -> Optional[BaseDataFetcher]:
@@ -153,6 +164,8 @@ class UnifiedDataFetcher(BaseDataFetcher):
         """
         if source_type == DataSourceType.AKSHARE:
             return self.akshare_fetcher
+        elif source_type == DataSourceType.EFINANCE:
+            return self.efinance_fetcher
         elif source_type == DataSourceType.TICKFLOW:
             return self.tickflow_fetcher
         return None
@@ -181,12 +194,12 @@ class UnifiedDataFetcher(BaseDataFetcher):
         """
         # 确定数据源顺序
         if self.primary_source == DataSourceType.AUTO:
-            sources = [DataSourceType.AKSHARE, DataSourceType.TICKFLOW]
+            sources = [DataSourceType.EFINANCE, DataSourceType.AKSHARE, DataSourceType.TICKFLOW]
         else:
             sources = [self.primary_source]
             if self.fallback_enabled:
                 # 添加备用数据源
-                for s in [DataSourceType.AKSHARE, DataSourceType.TICKFLOW]:
+                for s in [DataSourceType.EFINANCE, DataSourceType.AKSHARE, DataSourceType.TICKFLOW]:
                     if s not in sources:
                         sources.append(s)
         
@@ -199,8 +212,18 @@ class UnifiedDataFetcher(BaseDataFetcher):
             
             try:
                 logger.debug(f"尝试使用 {source.value} 执行 {method_name}")
-                method = getattr(fetcher, method_name)
-                result = method(*args, **kwargs)
+                if not hasattr(fetcher, method_name) and source == DataSourceType.EFINANCE:
+                    method_aliases = {
+                        'get_daily_quotes': 'get_daily_data',
+                        'get_financial_indicators': 'get_financial_data',
+                    }
+                    method_name_to_call = method_aliases.get(method_name, method_name)
+                else:
+                    method_name_to_call = method_name
+                method = getattr(fetcher, method_name_to_call)
+                result = self._call_fetcher_method(source, method_name, method, *args, **kwargs)
+                if isinstance(result, pd.DataFrame) and result.empty:
+                    raise DataFetchException(f"{source.value} 返回空数据")
                 logger.debug(f"{source.value} 执行 {method_name} 成功")
                 return result
             except Exception as e:
@@ -213,6 +236,47 @@ class UnifiedDataFetcher(BaseDataFetcher):
         if last_error:
             error_msg += f": {last_error}"
         raise DataFetchException(error_msg)
+
+    def _call_fetcher_method(
+        self,
+        source: DataSourceType,
+        method_name: str,
+        method,
+        *args,
+        **kwargs
+    ) -> Any:
+        """按数据源差异适配方法参数。"""
+        if method_name == 'get_stock_list':
+            exchange = args[0] if args else kwargs.get('exchange')
+            if source == DataSourceType.EFINANCE:
+                market_map = {'SH': 'sh', 'SZ': 'sz', 'BJ': 'bj', None: 'all'}
+                return method(market=market_map.get(exchange, 'all'))
+            if source == DataSourceType.AKSHARE:
+                df = method()
+                if exchange and 'exchange' in df.columns:
+                    df = df[df['exchange'] == exchange]
+                return df
+            return method(exchange)
+
+        if method_name == 'get_daily_quotes':
+            symbol = args[0] if len(args) > 0 else kwargs.get('symbol')
+            start_date = args[1] if len(args) > 1 else kwargs.get('start_date')
+            end_date = args[2] if len(args) > 2 else kwargs.get('end_date')
+            adjust = kwargs.get('adjust', 'qfq')
+            if source == DataSourceType.EFINANCE:
+                return method(symbol=symbol, start=start_date, end=end_date, adjust=adjust)
+            return method(symbol, start_date, end_date)
+
+        if method_name == 'get_financial_indicators' and source == DataSourceType.EFINANCE:
+            symbol = args[0] if args else kwargs.get('symbol')
+            return method(symbol)
+
+        try:
+            signature = inspect.signature(method)
+            accepted_kwargs = {k: v for k, v in kwargs.items() if k in signature.parameters}
+            return method(*args, **accepted_kwargs)
+        except (TypeError, ValueError):
+            return method(*args, **kwargs)
     
     def get_stock_list(self, exchange: Optional[str] = None) -> pd.DataFrame:
         """
@@ -297,12 +361,20 @@ class UnifiedDataFetcher(BaseDataFetcher):
         # 标准化股票代码
         symbol = self._normalize_symbol(symbol)
         
-        return self._execute_with_fallback(
+        df = self._execute_with_fallback(
             'get_daily_quotes',
             symbol,
             start_date,
             end_date
         )
+        if isinstance(df, pd.DataFrame):
+            df = df.rename(columns={
+                'date': 'trade_date',
+                'change_percent': 'pct_change',
+            })
+            if 'symbol' not in df.columns:
+                df['symbol'] = symbol
+        return df
     
     def get_daily_quotes_incremental(
         self,
@@ -747,7 +819,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
         """
         available = []
         
-        for source in [DataSourceType.AKSHARE, DataSourceType.TICKFLOW]:
+        for source in [DataSourceType.EFINANCE, DataSourceType.AKSHARE, DataSourceType.TICKFLOW]:
             if self.is_available(source):
                 available.append(source.value)
         

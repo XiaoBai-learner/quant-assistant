@@ -1,375 +1,208 @@
-# Quant Assistant - 个人量化交易软件
+# Quant Assistant - 个人量化研究助手
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Quant Assistant 是一个面向 A 股研究的个人量化框架，聚焦数据获取、因子计算、策略构建、回测验证和终端可视化。项目当前定位为“研究与验证工具”，适合用于个人策略实验、行情数据整理、技术指标分析和回测复盘；实盘交易、Web 平台和生产级监控仍处于规划阶段。
 
-一个模块化、可扩展的个人量化交易软件，支持策略研究、回测验证和实盘交易。
+> 风险提示：本项目仅供学习研究使用，不构成投资建议，也不提供实盘交易保证。
 
-## 🏗️ 系统架构
+## 当前能力
 
+| 能力域 | 状态 | 说明 |
+|---|---:|---|
+| 数据管理 | 已实现 | 支持 AKShare、EFinance、TickFlow 获取器，MySQL 存储，统一查询，数据校验和缓存基础设施。 |
+| 因子与指标 | 已实现 | 支持 MA、EMA、MACD、RSI、BOLL、KDJ、ATR、OBV 等技术因子，并包含 V2 因子引擎。 |
+| 策略研究 | 已实现 | 提供 `BaseStrategy`、信号生成、股票筛选、内置策略、策略组合和参数优化能力。 |
+| 回测验证 | 已实现 | 支持事件驱动与向量化回测，包含模拟券商、真实撮合、投资组合、成本模型和绩效分析。 |
+| 机器学习 | 已实现基础版 | 提供特征工程、模型封装、评估和股票预测器基础能力。 |
+| 可视化 | 已实现终端版 | 支持 ASCII K 线、技术指标、数据表格和命令行图表工具。 |
+| 风控 | 已实现基础版 | 提供仓位、回撤、集中度等风控管理基础能力。 |
+| 实盘交易 | 未实现 | 尚无券商网关、订单状态机、账户同步和自动执行能力。 |
+| Web 平台 | 未实现 | 尚无 Web UI、策略工作台、实时看板和多用户系统。 |
+
+## 项目结构
+
+```text
+quant-assistant/
+├── README.md
+├── main.py
+├── pyproject.toml
+├── requirements.txt
+├── config/
+│   ├── default.yaml
+│   └── production.yaml
+├── docs/
+│   ├── PRODUCT_DESCRIPTION.md
+│   ├── architecture_design.md
+│   ├── DATA_SOURCE_GUIDE.md
+│   ├── FACTORS.md
+│   ├── TICKFLOW_GUIDE.md
+│   ├── USER_GUIDE.md
+│   └── USAGE_GUIDE.md
+└── quant_assistant/
+    ├── api.py                  # 高层 API
+    ├── cli.py                  # quant / qa 命令行入口
+    ├── core/                   # 事件、上下文、依赖注入、异常和接口
+    ├── data/                   # 数据源、存储、查询、缓存、校验
+    ├── factors/                # 独立因子引擎
+    ├── strategy/               # 策略基类、因子、信号、组合、优化、ML
+    ├── backtest/               # 回测引擎、券商、组合、绩效、可视化
+    ├── ml/                     # 机器学习基础模块
+    ├── risk/                   # 风控管理
+    ├── visualization/          # 终端图表和指标渲染
+    └── utils/                  # 日志与配置工具
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    量化交易系统架构                          │
-├─────────────────────────────────────────────────────────────┤
-│  用户界面层  │  监控面板  │  告警中心                         │
-├─────────────────────────────────────────────────────────────┤
-│                    API Gateway                              │
-├─────────────────────────────────────────────────────────────┤
-│  策略研究层  │  回测模拟层  │  实盘交易层                      │
-├─────────────────────────────────────────────────────────────┤
-│                      风控中心                                │
-├─────────────────────────────────────────────────────────────┤
-│  数据管理层 (Data Manager) ✅ Phase 1 已完成                  │
-│  ┌──────────┬──────────┬──────────┬──────────┐             │
-│  │  Fetcher │ Storage  │  Query   │  Cache   │             │
-│  │(多数据源)│ (MySQL)  │ (Engine) │ (Redis)  │             │
-│  ├──────────┤          │          │          │             │
-│  │•AKShare  │          │          │          │             │
-│  │•EFinance │          │          │          │             │
-│  │•TickFlow │          │          │          │             │
-│  │ (免费/付)│          │          │          │             │
-│  └──────────┴──────────┴──────────┴──────────┘             │
-└─────────────────────────────────────────────────────────────┘
-```
 
-## 📦 功能模块
-
-### Phase 1: 数据管理层 ✅ (已完成)
-- [x] 多数据源接入
-  - [x] AKShare - 免费开源数据
-  - [x] EFinance - 实时行情数据
-  - [x] **TickFlow** - 稳定行情数据服务 (新增)
-    - 免费版: 日K线、财务数据、标的信息（无需API Key）
-    - 付费版: 分钟级K线、实时行情（需要API Key）
-- [x] MySQL 数据存储
-- [x] 统一查询接口
-- [x] 数据质量校验
-- [x] 命令行工具
-
-**文档**: [src/data/describe.md](src/data/describe.md)
-
-### Phase 2: 策略研究层 ✅ (已完成)
-- [x] 策略框架 (BaseStrategy)
-- [x] 技术指标库 (MA, MACD, RSI, BOLL, KDJ等)
-- [x] 因子计算引擎
-- [x] 信号生成器
-- [x] 股票筛选器
-- [x] 机器学习集成
-
-**文档**: [src/strategy/describe.md](src/strategy/describe.md)
-
-### Phase 2: 回测模拟层 ✅ (已完成)
-- [x] 事件驱动回测引擎
-- [x] 券商模拟 (订单撮合)
-- [x] 投资组合管理
-- [x] 绩效分析 (夏普比率、最大回撤等)
-- [x] 成本模型 (手续费、滑点、印花税)
-
-**文档**: [src/backtest/describe.md](src/backtest/describe.md)
-
-### Phase 2: 可视化层 ✅ (已完成)
-- [x] ASCII K线图
-- [x] 技术指标显示
-- [x] 数据表格渲染
-- [x] 命令行图表工具
-
-**文档**: [src/visualization/describe.md](src/visualization/describe.md)
-
-### Phase 3: 实盘交易层 (规划中)
-- [ ] 交易接口
-- [ ] 订单管理
-- [ ] 风控系统
-- [ ] 监控告警
-
-## 🚀 快速开始
+## 快速开始
 
 ### 环境要求
+
 - Python 3.10+
-- MySQL 8.0+ (可选，用于数据持久化)
+- MySQL 8.0+，仅在需要持久化数据时使用
 
 ### 安装
 
-#### 方式一：pip 安装（推荐）
-
 ```bash
-# 从 PyPI 安装（发布后会可用）
-pip install quant-assistant
-
-# 或从源码安装
 git clone https://github.com/XiaoBai-learner/quant-assistant.git
 cd quant-assistant
+python -m venv venv
+source venv/bin/activate
 pip install -e .
 ```
 
-#### 方式二：源码安装
+也可以使用依赖文件：
 
 ```bash
-# 克隆项目
-git clone https://github.com/XiaoBai-learner/quant-assistant.git
-cd quant-assistant
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
-
-# 安装依赖
 pip install -r requirements.txt
 ```
 
 ### 验证安装
 
 ```bash
-# 查看版本
 quant version
-
-# 或使用 Python
 python -c "import quant_assistant; print(quant_assistant.__version__)"
 ```
 
-### 配置
-
-```bash
-# 复制环境变量模板
-cp .env.example .env
-
-# 编辑 .env 文件，配置数据库连接
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=quant_user
-DB_PASSWORD=your_password
-DB_NAME=quant_data
-```
-
-### 初始化数据库
-
-```bash
-# 创建数据库和用户 (MySQL)
-mysql -u root -p
-```
-
-```sql
-CREATE DATABASE quant_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'quant_user'@'localhost' IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON quant_data.* TO 'quant_user'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-```bash
-# 初始化数据表
-python main.py init
-```
-
-### 快速示例
+### 基础示例
 
 ```python
-import quant_assistant as qa
 from quant_assistant import QuantAPI
 
-# 创建 API 实例
 api = QuantAPI()
 
-# 获取迈为股份数据
-data = api.data.get_stock_data('300751', start='2024-01-01')
+# 获取行情数据
+data = api.data.get_stock_data("300751", start="2024-01-01")
 
-# 计算技术指标
+# 计算指标
 ma20 = api.factors.ma(data, window=20)
 macd = api.factors.macd(data)
 
-# 创建策略并回测
-strategy = api.strategy.create('ma_cross', short_window=10, long_window=30)
+# 创建策略并运行回测
+strategy = api.strategy.create("ma_cross", short_window=10, long_window=30)
 result = api.backtest.run(strategy, data)
-
-# 查看回测结果
 analysis = api.backtest.analyze(result)
-print(f"总收益率: {analysis['total_return']*100:.2f}%")
+
+print(f"总收益率: {analysis['total_return'] * 100:.2f}%")
 ```
 
-### 使用 TickFlow 数据源
-
-```python
-from quant_assistant.data import TickFlowFetcher
-
-# 免费版（无需 API Key）
-fetcher = TickFlowFetcher()
-
-# 获取日线数据
-df = fetcher.get_daily_quotes('600000.SH', start_date='2024-01-01')
-
-# 获取股票列表
-stocks = fetcher.get_stock_list('SH')  # 上交所股票
-
-# 获取财务数据
-financials = fetcher.get_financial_indicators('600000.SH')
-
-# 付费版（需要 API Key）
-fetcher_paid = TickFlowFetcher(api_key='your-api-key', use_paid=True)
-
-# 获取分钟级数据（付费版功能）
-minute_df = fetcher_paid.get_minute_quotes('600000.SH', period='5m')
-
-# 获取实时行情（付费版功能）
-realtime = fetcher_paid.get_realtime_quotes(['600000.SH', '000001.SZ'])
-```
-
-### 命令行工具
+### 命令行示例
 
 ```bash
-# 查看版本
-quant version
-
-# 获取股票数据
 quant data get 300751 --start 2024-01-01
-
-# 计算技术指标
+quant data list --market all
 quant factor ma 300751 --window 20
-quant factor all 300751
-
-# 运行回测
+quant factor all 300751 --output factors.csv
 quant backtest run ma_cross --symbol 300751 --capital 100000
-
-# 训练ML模型
 quant ml train 300751 --model random_forest
 ```
 
-更多用法请参考 [使用手册](docs/USAGE_GUIDE.md)
+## 数据源
 
-## 📁 项目结构
+项目当前包含三类主要数据源：
 
+- `AKShareFetcher`：免费开源数据，覆盖面广，适合日线和基础数据研究。
+- `EFinanceFetcher`：适合行情、分钟和实时数据场景。
+- `TickFlowFetcher`：支持免费/付费模式，付费模式可扩展分钟级和实时行情。
+- `UnifiedDataFetcher`：高层 API 默认使用的统一数据获取器，按 EFinance、AKShare、TickFlow 做主备尝试，支持故障切换、空结果 fallback 和基础字段标准化。
+
+`api.data.get_stock_data()` 会把不同数据源返回的 `date`、`change_percent` 等字段统一为 `trade_date`、`pct_change` 等常用字段，并按用户传入的日期区间做最终裁剪。如果数据源返回了区间外数据，会给出明确错误，避免静默返回误导性的空结果。
+
+更多细节见 [docs/DATA_SOURCE_GUIDE.md](docs/DATA_SOURCE_GUIDE.md) 和 [docs/TICKFLOW_GUIDE.md](docs/TICKFLOW_GUIDE.md)。
+
+## 文档入口
+
+| 文档 | 用途 |
+|---|---|
+| [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md) | 产品定位、功能边界、当前状态和下一轮开发任务。 |
+| [docs/architecture_design.md](docs/architecture_design.md) | 分层架构、模块关系和路线图。 |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 面向使用者的完整手册。 |
+| [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md) | 命令和 API 使用示例。 |
+| [docs/DATA_SOURCE_GUIDE.md](docs/DATA_SOURCE_GUIDE.md) | 数据源配置和统一获取器说明。 |
+| [docs/FACTORS.md](docs/FACTORS.md) | 因子体系说明。 |
+| [quant_assistant/data/describe.md](quant_assistant/data/describe.md) | 数据模块说明。 |
+| [quant_assistant/strategy/describe.md](quant_assistant/strategy/describe.md) | 策略模块说明。 |
+| [quant_assistant/backtest/describe.md](quant_assistant/backtest/describe.md) | 回测模块说明。 |
+| [quant_assistant/visualization/describe.md](quant_assistant/visualization/describe.md) | 可视化模块说明。 |
+
+
+## 股票池多因子选股研究
+
+第一阶段研究入口是 `SelectionResearch`，目标是围绕股票池做多因子排名、Top N 选股、等权组合和调仓回测。用户负责输入股票池、指标权重和调仓规则；系统负责指标计算、截面标准化、选股解释和组合回测。
+
+```python
+import pandas as pd
+from quant_assistant.research import SelectionResearch, FactorDefinition
+
+# data 是多股票日线长表，至少包含：
+# symbol, trade_date, open, high, low, close, volume, amount
+
+def close_to_open(df: pd.DataFrame) -> pd.Series:
+    return df["close"] / df["open"] - 1
+
+research = SelectionResearch(
+    universe=["000001", "000002", "600000", "600519"],
+    start="2024-01-01",
+    end="2024-12-31",
+    factors={
+        "momentum_20": 1.0,
+        "momentum_60": 1.0,
+        "volatility_20": -0.7,
+        "turnover_amount_20": 0.4,
+        "close_to_open": 0.1,
+    },
+    top_n=10,
+    rebalance="M",
+    data=data,
+)
+
+research.register_factor(FactorDefinition(
+    name="close_to_open",
+    direction="positive",
+    min_periods=1,
+    dependencies=["close", "open"],
+    compute=close_to_open,
+))
+
+result = research.run()
+print(result.metrics)
+print(result.latest_selection)
+print(result.factor_contributions.tail())
 ```
-quant-assistant/
-├── README.md                 # 项目说明
-├── main.py                   # 主程序入口
-├── requirements.txt          # Python依赖
-├── .env.example             # 环境变量模板
-├── config/                  # 配置文件
-│   ├── default.yaml
-│   └── production.yaml
-├── docs/                    # 文档
-│   ├── architecture_design.md
-│   ├── data_management_phase1.md
-│   ├── strategy_layer_design.md
-│   └── ui_layer_design.md
-├── src/                     # 源代码
-│   ├── core/                # 核心框架
-│   │   ├── events.py        # 事件系统
-│   │   ├── context.py       # 上下文管理
-│   │   └── describe.md      # 模块说明
-│   ├── data/                # 数据管理层
-│   │   ├── fetcher/         # 数据获取
-│   │   ├── storage/         # 数据存储
-│   │   ├── query/           # 数据查询
-│   │   ├── database/        # 数据库连接
-│   │   └── describe.md      # 模块说明
-│   ├── strategy/            # 策略层
-│   │   ├── base.py          # 策略基类
-│   │   ├── factors/         # 因子引擎
-│   │   ├── signal_synthesis/# 信号合成
-│   │   ├── ml/              # 机器学习
-│   │   └── describe.md      # 模块说明
-│   ├── backtest/            # 回测层
-│   │   ├── engine.py        # 回测引擎
-│   │   ├── broker.py        # 券商模拟
-│   │   ├── portfolio.py     # 投资组合
-│   │   ├── performance.py   # 绩效分析
-│   │   └── describe.md      # 模块说明
-│   ├── visualization/       # 可视化层
-│   │   ├── indicators/      # 技术指标
-│   │   ├── layouts/         # 图表布局
-│   │   ├── renderers/       # 渲染器
-│   │   ├── adapters/        # 数据适配
-│   │   └── describe.md      # 模块说明
-│   ├── utils/               # 工具模块
-│   │   ├── logger.py        # 日志管理
-│   │   ├── config.py        # 配置管理
-│   │   └── describe.md      # 模块说明
-│   └── config.py            # 主配置
-└── tests/                   # 测试代码
-    ├── test_integration.py  # 集成测试
-    ├── test_backtest.py     # 回测测试
-    ├── test_strategy.py     # 策略测试
-    └── ...
-```
 
-## 📊 数据库设计
+内置第一批指标包括 `momentum_20`、`momentum_60`、`ma_position_20`、`ma_position_60`、`volatility_20`、`turnover_amount_20`、`drawdown_20`、`atr_ratio_14`。后续可以通过 `FactorDefinition` 注册用户自定义指标，再由 `factors={...}` 配置权重组合成选股策略。
 
-### 核心表
+## 下一轮开发重点
 
-| 表名 | 说明 | 主要字段 |
-|------|------|----------|
-| stocks | 股票基础信息 | symbol, name, exchange, industry |
-| daily_quotes | 日线行情 | open, high, low, close, volume |
-| financial_indicators | 财务指标 | eps, roe, revenue, net_profit |
-| trade_calendar | 交易日历 | trade_date, is_trading_day |
-| update_logs | 更新日志 | table_name, record_count, status |
+1. 收敛数据层接口：统一 `get_daily_data`、`get_daily_quotes`、`get_price_data` 的命名和返回字段。
+2. 扩展测试体系：当前已有最小烟雾测试，下一步为更多数据源适配、因子计算、策略生成和回测结果建立可重复测试。
+3. 整理包导出：修正 `__init__.py` 中历史类名和实际实现不一致的问题。
+4. 强化回测可信度：补充交易日处理、停牌/涨跌停、成交量约束和基准对比。
+5. 规划实盘前置能力：先完成模拟交易、订单状态机、账户/持仓抽象和风控钩子。
 
-## 📚 文档
+详细任务见 [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md)。
 
-### 使用手册
+## 许可证
 
-📖 **[使用手册 (USER_GUIDE.md)](docs/USER_GUIDE.md)** - 完整的使用指南，包含：
-- 快速开始
-- 数据管理（获取、存储、查询、校验、缓存）
-- 策略开发（创建策略、因子、组合、优化）
-- 回测验证（事件驱动、向量化、风控、绩效分析）
-- 高级功能（依赖注入、事件系统）
-- API参考
-- 常见问题
+MIT License
 
-### 模块文档
+## 作者
 
-| 模块 | 文档 | 说明 |
-|------|------|------|
-| Core | [src/core/describe.md](src/core/describe.md) | 事件系统、上下文管理、依赖注入 |
-| Data | [src/data/describe.md](src/data/describe.md) | 数据获取、存储、查询 |
-| Strategy | [src/strategy/describe.md](src/strategy/describe.md) | 策略框架、因子、信号 |
-| Backtest | [src/backtest/describe.md](src/backtest/describe.md) | 回测引擎、绩效分析 |
-| Visualization | [src/visualization/describe.md](src/visualization/describe.md) | 图表渲染、技术指标 |
-| Utils | [src/utils/describe.md](src/utils/describe.md) | 日志、配置 |
-
-## 🛠️ 开发路线图
-
-### Phase 1: 基础版 ✅
-- [x] 数据管理层
-- [x] CLI 工具
-- [x] 基础架构
-
-### Phase 2: 策略版 ✅
-- [x] 策略框架
-- [x] 技术指标
-- [x] 回测引擎（事件驱动 + 向量化）
-- [x] 真实撮合引擎
-- [x] 风控管理
-- [x] 绩效分析
-- [x] 策略参数优化
-- [x] 策略组合
-- [x] 多级缓存
-- [x] 依赖注入
-
-### Phase 3: 实盘版 (规划中)
-- [ ] 交易接口（⚠️ 当前不支持）
-- [ ] 自动订单执行（⚠️ 当前不支持）
-- [ ] 实时监控（⚠️ 当前不支持）
-
-### Phase 4: 平台版 (规划中)
-- [ ] Web 前端（⚠️ 当前不支持）
-- [ ] 分布式回测（⚠️ 当前不支持）
-- [ ] 强化学习策略（⚠️ 当前不支持）
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📄 许可证
-
-[MIT License](LICENSE)
-
-## 👤 作者
-
-**XiaoBai-learner**
-- GitHub: [@XiaoBai-learner](https://github.com/XiaoBai-learner)
-- Email: 185890339@qq.com
-
----
-
-> ⚠️ **风险提示**: 量化交易涉及金融风险，本软件仅供学习研究使用，不构成投资建议。
+XiaoBai-learner

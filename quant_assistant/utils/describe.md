@@ -38,7 +38,7 @@
 
 **使用示例**:
 ```python
-from src.utils.logger import setup_logging, get_logger
+from quant_assistant.utils.logger import setup_logging, get_logger
 
 # 初始化日志
 setup_logging()
@@ -90,7 +90,7 @@ DB_NAME=quant_data
 
 **使用示例**:
 ```python
-from src.utils.config import db_config, data_config
+from quant_assistant.utils.config import db_config, data_config
 
 # 数据库连接
 conn_string = db_config.connection_string

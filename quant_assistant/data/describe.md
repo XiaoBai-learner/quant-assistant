@@ -7,7 +7,7 @@
 ## 架构图
 
 ```
-外部数据源 (AKShare/Tushare)
+外部数据源 (AKShare/EFinance/TickFlow)
     ↓
 Fetcher (数据获取)
     ↓
@@ -41,7 +41,7 @@ Query Engine (查询引擎)
 
 **使用示例**:
 ```python
-from src.data import AKShareFetcher
+from quant_assistant.data import AKShareFetcher
 
 fetcher = AKShareFetcher()
 stocks = fetcher.get_stock_list()
@@ -85,7 +85,7 @@ df = fetcher.get_daily_quotes('000001', '2024-01-01', '2024-12-31')
 
 **使用示例**:
 ```python
-from src.data import DataQueryEngine
+from quant_assistant.data import DataQueryEngine
 
 query = DataQueryEngine()
 df = query.get_price_data('000001', '2024-01-01', '2024-12-31')

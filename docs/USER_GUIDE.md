@@ -64,15 +64,15 @@ FLUSH PRIVILEGES;
 ### 1.3 初始化系统
 
 ```python
-from src.data import DataQueryEngine
-from src.config_manager import get_config
+from quant_assistant.data import DataQueryEngine
+from quant_assistant.config_manager import get_config
 
 # 初始化配置
 config = get_config()
 print(f"数据库: {config.database.connection_string}")
 
 # 测试数据库连接
-from src.data.database import db_manager
+from quant_assistant.data.database import db_manager
 if db_manager.test_connection():
     print("✅ 数据库连接成功")
 else:
@@ -86,7 +86,7 @@ else:
 ### 2.1 数据获取
 
 ```python
-from src.data import AKShareFetcher
+from quant_assistant.data import AKShareFetcher
 
 # 创建获取器
 fetcher = AKShareFetcher()
@@ -107,7 +107,7 @@ print(f"获取到 {len(df)} 条数据")
 ### 2.2 增量更新（推荐）
 
 ```python
-from src.data import AKShareFetcher, MySQLStorage
+from quant_assistant.data import AKShareFetcher, MySQLStorage
 
 fetcher = AKShareFetcher()
 storage = MySQLStorage()
@@ -131,7 +131,7 @@ else:
 ### 2.3 数据校验
 
 ```python
-from src.data import DataValidator
+from quant_assistant.data import DataValidator
 
 validator = DataValidator()
 
@@ -149,7 +149,7 @@ else:
 ### 2.4 数据查询（带缓存）
 
 ```python
-from src.data import DataQueryEngine, DataCache
+from quant_assistant.data import DataQueryEngine, DataCache
 
 # 创建带缓存的查询引擎
 cache = DataCache(memory_ttl=60, redis_ttl=300)
@@ -174,7 +174,7 @@ print(f"L1命中率: {stats['l1']['hit_rate']:.2%}")
 ### 2.5 批量数据更新
 
 ```python
-from src.data import AKShareFetcher, MySQLStorage
+from quant_assistant.data import AKShareFetcher, MySQLStorage
 
 fetcher = AKShareFetcher()
 storage = MySQLStorage()
@@ -200,7 +200,7 @@ for symbol in symbols:
 ### 3.1 创建简单策略
 
 ```python
-from src.strategy.base import BaseStrategy, Bar, Signal, SignalType
+from quant_assistant.strategy.base import BaseStrategy, Bar, Signal, SignalType
 from typing import Optional
 
 class MAStrategy(BaseStrategy):
@@ -252,7 +252,7 @@ class MAStrategy(BaseStrategy):
 ### 3.2 使用因子引擎
 
 ```python
-from src.strategy.factors import FactorEngine
+from quant_assistant.strategy.factors import FactorEngine
 
 # 创建因子引擎
 engine = FactorEngine()
@@ -271,8 +271,8 @@ print(f"MACD: {macd.iloc[-1]:.2f}")
 ### 3.3 策略组合
 
 ```python
-from src.strategy.composite import CompositeStrategy
-from src.strategy.examples.ma_strategy import MAStrategy
+from quant_assistant.strategy.composite import CompositeStrategy
+from quant_assistant.strategy.examples.ma_strategy import MAStrategy
 
 # 创建子策略
 strategy1 = MAStrategy(fast_period=5, slow_period=20)
@@ -295,8 +295,8 @@ engine.set_strategy(composite)
 ### 3.4 策略参数优化
 
 ```python
-from src.strategy.optimizer import StrategyOptimizer
-from src.backtest.engine import BacktestConfig
+from quant_assistant.strategy.optimizer import StrategyOptimizer
+from quant_assistant.backtest.engine import BacktestConfig
 
 # 准备数据
 query = DataQueryEngine()
@@ -331,7 +331,7 @@ print(f"最佳夏普比率: {result.best_score:.2f}")
 ### 3.5 前向优化（避免过拟合）
 
 ```python
-from src.strategy.optimizer import WalkForwardOptimizer
+from quant_assistant.strategy.optimizer import WalkForwardOptimizer
 
 # 创建前向优化器
 wf_optimizer = WalkForwardOptimizer(
@@ -357,7 +357,7 @@ print(f"平均测试得分: {result['avg_test_score']:.2f}")
 ### 4.1 事件驱动回测
 
 ```python
-from src.backtest import BacktestEngine, BacktestConfig
+from quant_assistant.backtest import BacktestEngine, BacktestConfig
 from datetime import date
 
 # 回测配置
@@ -393,7 +393,7 @@ print(f"最大回撤: {metrics['max_drawdown']:.2%}")
 ### 4.2 向量化回测（快速）
 
 ```python
-from src.backtest import VectorizedBacktestEngine
+from quant_assistant.backtest import VectorizedBacktestEngine
 
 # 创建向量化引擎
 engine = VectorizedBacktestEngine(config)
@@ -415,8 +415,8 @@ print(f"夏普比率: {result.metrics['sharpe_ratio']:.2f}")
 ### 4.3 使用真实撮合引擎
 
 ```python
-from src.backtest import BacktestEngine
-from src.backtest.realistic_broker import RealisticBroker
+from quant_assistant.backtest import BacktestEngine
+from quant_assistant.backtest.realistic_broker import RealisticBroker
 
 # 创建真实撮合引擎
 broker = RealisticBroker(config, market_impact=0.0001)
@@ -439,7 +439,7 @@ print(f"卖一: {order_book.best_ask().price}")
 ### 4.4 风控管理
 
 ```python
-from src.risk import RiskManager
+from quant_assistant.risk import RiskManager
 
 # 创建风控管理器
 risk_manager = RiskManager(
@@ -462,7 +462,7 @@ engine = BacktestEngine(
 ### 4.5 绩效分析
 
 ```python
-from src.backtest import PerformanceAnalyzer
+from quant_assistant.backtest import PerformanceAnalyzer
 
 # 创建分析器
 analyzer = PerformanceAnalyzer()
@@ -502,8 +502,8 @@ print(report)
 ### 5.1 依赖注入
 
 ```python
-from src.core import get_container, register_type, resolve
-from src.core.interfaces import IBroker, IPortfolio
+from quant_assistant.core import get_container, register_type, resolve
+from quant_assistant.core.interfaces import IBroker, IPortfolio
 
 # 注册自定义实现
 from my_broker import MyBroker
@@ -522,7 +522,7 @@ engine = BacktestEngine(
 ### 5.2 事件系统
 
 ```python
-from src.core import EventBus, EventType, Event
+from quant_assistant.core import EventBus, EventType, Event
 
 # 获取事件总线
 bus = EventBus()
@@ -545,7 +545,7 @@ bus.emit(event)
 ### 5.3 自定义异常处理
 
 ```python
-from src.core.exceptions import DataException, StrategyException
+from quant_assistant.core.exceptions import DataException, StrategyException
 
 try:
     df = fetcher.get_daily_quotes('000001')
@@ -597,19 +597,19 @@ except DataException as e:
 
 ```python
 # 检查配置
-from src.config_manager import get_config
+from quant_assistant.config_manager import get_config
 config = get_config()
 print(config.database.connection_string)
 
 # 测试连接
-from src.data.database import db_manager
+from quant_assistant.data.database import db_manager
 print(db_manager.test_connection())
 ```
 
 ### Q2: 如何添加新的数据源？
 
 ```python
-from src.data.fetcher.base_fetcher import BaseDataFetcher
+from quant_assistant.data.fetcher.base_fetcher import BaseDataFetcher
 
 class MyFetcher(BaseDataFetcher):
     def get_daily_quotes(self, symbol, start_date, end_date):
@@ -617,8 +617,8 @@ class MyFetcher(BaseDataFetcher):
         pass
 
 # 注册到容器
-from src.core import register_type
-from src.core.interfaces import IDataFetcher
+from quant_assistant.core import register_type
+from quant_assistant.core.interfaces import IDataFetcher
 register_type(IDataFetcher, MyFetcher)
 ```
 

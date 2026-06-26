@@ -52,7 +52,7 @@
 
 **使用示例**:
 ```python
-from src.strategy import BaseStrategy, Bar, Signal
+from quant_assistant.strategy import BaseStrategy, Bar, Signal
 
 class MyStrategy(BaseStrategy):
     def on_init(self, context):
@@ -97,7 +97,7 @@ class MyStrategy(BaseStrategy):
 
 **使用示例**:
 ```python
-from src.strategy.factors import FactorEngine
+from quant_assistant.strategy.factors import FactorEngine
 
 engine = FactorEngine()
 engine.register_builtin_factors()
@@ -132,7 +132,7 @@ results = engine.calculate(df, ['MA5', 'MA10', 'MACD'])
 
 **使用示例**:
 ```python
-from src.strategy.signal_synthesis import SignalGenerator, StrategyRule
+from quant_assistant.strategy.signal_synthesis import SignalGenerator, StrategyRule
 
 generator = SignalGenerator()
 generator.add_buy_rule(StrategyRule('MA金叉', lambda d: d['MA5'] > d['MA10']))

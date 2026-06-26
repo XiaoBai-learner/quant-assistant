@@ -271,7 +271,7 @@ CREATE TABLE strategies (
 ## 六、文件结构
 
 ```
-src/
+quant_assistant/
 ├── strategy/                   # 策略研究层
 │   ├── __init__.py
 │   ├── base.py                # 策略基类

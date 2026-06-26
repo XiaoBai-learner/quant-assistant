@@ -31,7 +31,7 @@
 
 **使用示例**:
 ```python
-from src.core import event_bus, EventType, Event
+from quant_assistant.core import event_bus, EventType, Event
 
 # 订阅事件
 def on_data_updated(event):
@@ -64,7 +64,7 @@ event_bus.emit(event)
 
 **使用示例**:
 ```python
-from src.core import get_context
+from quant_assistant.core import get_context
 
 ctx = get_context()
 ctx.set('current_symbol', '000001')
