@@ -150,7 +150,13 @@ quant ml train 300751 --model random_forest
 ```python
 import pandas as pd
 from quant_assistant import QuantAPI
-from quant_assistant.research import DataBundleBuilder, FactorAnalyzer, FactorDefinition, SelectionResearch
+from quant_assistant.research import (
+    DataBundleBuilder,
+    FactorAnalyzer,
+    FactorDefinition,
+    ResearchReport,
+    SelectionResearch,
+)
 
 api = QuantAPI()
 
@@ -211,6 +217,12 @@ result = research.run()
 print(result.metrics)
 print(result.latest_selection)
 print(result.factor_contributions.tail())
+
+ResearchReport().write_markdown(
+    result,
+    factor_analysis=factor_analysis,
+    output_path="reports/stock_pool_research.md",
+)
 ```
 
 内置第一批指标包括 `momentum_20`、`momentum_60`、`ma_position_20`、`ma_position_60`、`volatility_20`、`turnover_amount_20`、`drawdown_20`、`atr_ratio_14`。后续可以通过 `FactorDefinition` 注册用户自定义指标，再由 `factors={...}` 配置权重组合成选股策略。
