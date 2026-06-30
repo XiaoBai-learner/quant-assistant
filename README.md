@@ -133,6 +133,7 @@ quant ml train 300751 --model random_forest
 |---|---|
 | [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md) | 产品定位、功能边界、当前状态和下一轮开发任务。 |
 | [docs/architecture_design.md](docs/architecture_design.md) | 分层架构、模块关系和路线图。 |
+| [docs/ASHARE_DAILY_CACHE.md](docs/ASHARE_DAILY_CACHE.md) | A 股日线 Parquet 本地缓存、初始化和每日更新任务。 |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 面向使用者的完整手册。 |
 | [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md) | 命令和 API 使用示例。 |
 | [docs/DATA_SOURCE_GUIDE.md](docs/DATA_SOURCE_GUIDE.md) | 数据源配置和统一获取器说明。 |

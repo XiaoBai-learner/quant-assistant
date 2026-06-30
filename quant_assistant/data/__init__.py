@@ -52,6 +52,7 @@ from quant_assistant.data.fetcher import (
 from quant_assistant.data.storage import MySQLStorage
 from quant_assistant.data.query import DataQueryEngine
 from quant_assistant.data.cache import DataCache, MemoryCache, CacheEntry
+from quant_assistant.data.local_cache import AshareCacheUpdater, AshareDailyCache
 
 # 为向后兼容保留别名
 DataFetcher = UnifiedDataFetcher
@@ -73,6 +74,8 @@ __all__ = [
     'DataQueryEngine',
     
     # 缓存
+    'AshareCacheUpdater',
+    'AshareDailyCache',
     'DataCache',
     'MemoryCache',
     'CacheEntry',

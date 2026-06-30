@@ -39,6 +39,7 @@ env/
 # Logs
 *.log
 logs/
+reports/
 
 # Data
 *.csv
