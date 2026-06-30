@@ -61,7 +61,7 @@ def test_selection_evaluator_calculates_core_metrics():
     assert "max_drawdown" in metrics
     assert metrics["total_return"] > 0
 
-from quant_assistant.research import SelectionResearch
+from quant_assistant.research import DataBundle, DataQualityReport, SelectionResearch, Universe
 
 
 def make_research_panel():
@@ -100,3 +100,29 @@ def test_selection_research_runs_end_to_end_with_user_factor_weights():
     assert not result.selections.empty
     assert not result.holdings.empty
     assert "momentum_20_contribution" in result.factor_scores.columns
+
+
+def test_selection_research_from_bundle_uses_panel_and_quality_summary():
+    panel = make_research_panel()
+    universe = Universe.from_symbols(["A", "B", "C"])
+    quality = DataQualityReport.from_panel(universe, panel, start="2024-01-01", end="2024-05-01")
+    bundle = DataBundle(
+        universe=universe,
+        panel=panel,
+        start="2024-01-01",
+        end="2024-05-01",
+        quality=quality,
+    )
+
+    research = SelectionResearch.from_bundle(
+        bundle,
+        factors={"momentum_20": 1.0, "volatility_20": -0.2},
+        top_n=2,
+        rebalance="M",
+    )
+
+    result = research.run()
+
+    assert not result.selections.empty
+    assert result.data_quality["total_symbols"] == 3
+    assert result.data_quality["available_symbols"] == 3

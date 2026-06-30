@@ -189,10 +189,8 @@ factor_analysis = factor_analyzer.analyze(
 )
 print(factor_analysis.summary_table)
 
-research = SelectionResearch(
-    universe=bundle.symbols,
-    start=bundle.start,
-    end=bundle.end,
+research = SelectionResearch.from_bundle(
+    bundle,
     factors={
         "momentum_20": 1.0,
         "momentum_60": 1.0,
@@ -202,7 +200,6 @@ research = SelectionResearch(
     },
     top_n=10,
     rebalance="M",
-    data=bundle.panel,
 )
 
 research.register_factor(FactorDefinition(

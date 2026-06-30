@@ -1,5 +1,5 @@
 """End-to-end stock-pool factor selection research workflow."""
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
@@ -7,6 +7,7 @@ from .backtest import SelectionBacktester
 from .config import SelectionResearchConfig
 from .evaluation import SelectionEvaluator
 from .factors import FactorCalculator, FactorDefinition
+from .panel import DataBundle
 from .portfolio import PortfolioConstructor
 from .preprocessing import FactorPreprocessor
 from .result import SelectionResearchResult
@@ -30,6 +31,7 @@ class SelectionResearch:
         data_loader: Optional[Callable[[List[str], str, str], pd.DataFrame]] = None,
         max_weight: float = 0.2,
         initial_cash: float = 100000.0,
+        data_quality: Optional[Dict[str, Any]] = None,
     ):
         self.config = SelectionResearchConfig(
             universe=universe,
@@ -44,6 +46,33 @@ class SelectionResearch:
         self.data_loader = data_loader
         self.factor_calculator = FactorCalculator(factor_definitions)
         self.initial_cash = initial_cash
+        self.data_quality = data_quality
+
+    @classmethod
+    def from_bundle(
+        cls,
+        bundle: DataBundle,
+        factors: Dict[str, float],
+        top_n: int = 10,
+        rebalance: str = "M",
+        factor_definitions: Optional[Dict[str, FactorDefinition]] = None,
+        max_weight: float = 0.2,
+        initial_cash: float = 100000.0,
+    ) -> "SelectionResearch":
+        """Create a research workflow directly from a DataBundle."""
+        return cls(
+            universe=bundle.symbols,
+            start=bundle.start,
+            end=bundle.end,
+            factors=factors,
+            top_n=top_n,
+            rebalance=rebalance,
+            data=bundle.panel,
+            factor_definitions=factor_definitions,
+            max_weight=max_weight,
+            initial_cash=initial_cash,
+            data_quality=bundle.quality.summary() if bundle.quality is not None else None,
+        )
 
     def register_factor(self, definition: FactorDefinition) -> None:
         """Register a user-defined factor for this research workflow."""
@@ -83,7 +112,7 @@ class SelectionResearch:
             factor_values=factor_values,
             factor_scores=factor_scores,
             factor_contributions=self._contributions(factor_scores),
-            data_quality=data_quality,
+            data_quality=self.data_quality or data_quality,
             warnings=warnings,
         )
 
