@@ -150,7 +150,7 @@ quant ml train 300751 --model random_forest
 ```python
 import pandas as pd
 from quant_assistant import QuantAPI
-from quant_assistant.research import DataBundleBuilder, FactorDefinition, SelectionResearch
+from quant_assistant.research import DataBundleBuilder, FactorAnalyzer, FactorDefinition, SelectionResearch
 
 api = QuantAPI()
 
@@ -166,6 +166,22 @@ print(bundle.quality.summary())
 
 def close_to_open(df: pd.DataFrame) -> pd.Series:
     return df["close"] / df["open"] - 1
+
+factor_analyzer = FactorAnalyzer()
+factor_analyzer.factor_calculator.register_factor(FactorDefinition(
+    name="close_to_open",
+    direction="positive",
+    min_periods=1,
+    dependencies=["close", "open"],
+    compute=close_to_open,
+))
+factor_analysis = factor_analyzer.analyze(
+    data=bundle.panel,
+    factors=["momentum_20", "momentum_60", "volatility_20", "close_to_open"],
+    forward_returns=[5, 20],
+    rebalance="M",
+)
+print(factor_analysis.summary_table)
 
 research = SelectionResearch(
     universe=bundle.symbols,
