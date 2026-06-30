@@ -152,6 +152,7 @@ import pandas as pd
 from quant_assistant import QuantAPI
 from quant_assistant.research import (
     DataBundleBuilder,
+    ExperimentComparison,
     ExperimentRecord,
     FactorAnalyzer,
     FactorDefinition,
@@ -232,7 +233,11 @@ ExperimentRecord.from_research(
     rebalance="M",
     result=result,
     factor_analysis=factor_analysis,
-).export_json("reports/experiment.json")
+).export_json("reports/experiments/stock_pool_factor_demo.json")
+
+comparison = ExperimentComparison.from_directory("reports/experiments")
+comparison.export_csv("reports/experiment_comparison.csv")
+print(comparison.to_frame())
 ```
 
 内置第一批指标包括 `momentum_20`、`momentum_60`、`ma_position_20`、`ma_position_60`、`volatility_20`、`turnover_amount_20`、`drawdown_20`、`atr_ratio_14`。后续可以通过 `FactorDefinition` 注册用户自定义指标，再由 `factors={...}` 配置权重组合成选股策略。

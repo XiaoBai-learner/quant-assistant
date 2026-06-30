@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import subprocess
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional
+
+import pandas as pd
 
 from .factor_analysis import FactorAnalysisResult
 from .panel import DataBundle
@@ -105,3 +107,77 @@ class ExperimentRecord:
         except (OSError, subprocess.CalledProcessError):
             return None
         return result.stdout.strip() or None
+
+
+class ExperimentComparison:
+    """Compare multiple exported experiment records."""
+
+    def __init__(self, records: Iterable[Dict[str, Any]]):
+        self.records = list(records)
+
+    @classmethod
+    def from_json_files(cls, paths: Iterable[str]) -> "ExperimentComparison":
+        """Load experiment records from JSON files."""
+        records = []
+        for path in paths:
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+            records.append(payload)
+        return cls(records)
+
+    @classmethod
+    def from_directory(cls, directory: str, pattern: str = "*.json") -> "ExperimentComparison":
+        """Load experiment records from a directory."""
+        paths = sorted(str(path) for path in Path(directory).glob(pattern))
+        return cls.from_json_files(paths)
+
+    def to_frame(self, sort_by: str = "total_return", ascending: bool = False) -> pd.DataFrame:
+        """Return a flattened comparison table."""
+        rows = [self._flatten_record(record) for record in self.records]
+        table = pd.DataFrame(rows)
+        if sort_by in table.columns:
+            table = table.sort_values(sort_by, ascending=ascending, na_position="last")
+        return table.reset_index(drop=True)
+
+    def export_csv(self, output_path: str, sort_by: str = "total_return", ascending: bool = False) -> None:
+        """Export the comparison table to CSV."""
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.to_frame(sort_by=sort_by, ascending=ascending).to_csv(path, index=False)
+
+    @staticmethod
+    def _flatten_record(record: Dict[str, Any]) -> Dict[str, Any]:
+        universe = record.get("universe", {}) or {}
+        period = record.get("period", {}) or {}
+        strategy = record.get("strategy", {}) or {}
+        data_quality = record.get("data_quality", {}) or {}
+        metrics = record.get("metrics", {}) or {}
+        factor_summary = record.get("factor_summary", {}) or {}
+        factors = strategy.get("factors", {}) or {}
+        return {
+            "name": record.get("name"),
+            "created_at": record.get("created_at"),
+            "start": period.get("start"),
+            "end": period.get("end"),
+            "symbol_count": universe.get("symbol_count"),
+            "available_symbols": data_quality.get("available_symbols"),
+            "top_n": strategy.get("top_n"),
+            "rebalance": strategy.get("rebalance"),
+            "factor_count": len(factors),
+            "total_return": metrics.get("total_return"),
+            "max_drawdown": metrics.get("max_drawdown"),
+            "mean_rank_ic": ExperimentComparison._mean_factor_value(factor_summary, "rank_ic_mean"),
+            "mean_top_bottom": ExperimentComparison._mean_factor_value(factor_summary, "top_bottom_mean"),
+            "git_commit": record.get("git_commit"),
+            "notes": record.get("notes"),
+        }
+
+    @staticmethod
+    def _mean_factor_value(factor_summary: Dict[str, Any], key: str) -> Optional[float]:
+        values: List[float] = []
+        for item in factor_summary.values():
+            value = item.get(key) if isinstance(item, dict) else None
+            if value is not None:
+                values.append(float(value))
+        if not values:
+            return None
+        return float(sum(values) / len(values))

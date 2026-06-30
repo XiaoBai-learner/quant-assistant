@@ -1,7 +1,7 @@
 """Stock-pool factor selection research tools."""
 from .config import CostConfig, SelectionResearchConfig
 from .data_quality import DataQualityReport, SymbolDataQuality
-from .experiment import ExperimentRecord
+from .experiment import ExperimentComparison, ExperimentRecord
 from .factor_analysis import FactorAnalysisResult, FactorAnalyzer
 from .factors import FactorCalculator, FactorDefinition, builtin_factor_definitions
 from .panel import DataBundle, DataBundleBuilder
@@ -15,6 +15,7 @@ __all__ = [
     "DataBundle",
     "DataBundleBuilder",
     "DataQualityReport",
+    "ExperimentComparison",
     "ExperimentRecord",
     "FactorAnalysisResult",
     "FactorAnalyzer",
