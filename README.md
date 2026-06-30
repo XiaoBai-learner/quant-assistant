@@ -152,6 +152,7 @@ import pandas as pd
 from quant_assistant import QuantAPI
 from quant_assistant.research import (
     DataBundleBuilder,
+    ExperimentRecord,
     FactorAnalyzer,
     FactorDefinition,
     ResearchReport,
@@ -189,15 +190,17 @@ factor_analysis = factor_analyzer.analyze(
 )
 print(factor_analysis.summary_table)
 
+factor_weights = {
+    "momentum_20": 1.0,
+    "momentum_60": 1.0,
+    "volatility_20": -0.7,
+    "turnover_amount_20": 0.4,
+    "close_to_open": 0.1,
+}
+
 research = SelectionResearch.from_bundle(
     bundle,
-    factors={
-        "momentum_20": 1.0,
-        "momentum_60": 1.0,
-        "volatility_20": -0.7,
-        "turnover_amount_20": 0.4,
-        "close_to_open": 0.1,
-    },
+    factors=factor_weights,
     top_n=10,
     rebalance="M",
 )
@@ -220,6 +223,16 @@ ResearchReport().write_markdown(
     factor_analysis=factor_analysis,
     output_path="reports/stock_pool_research.md",
 )
+
+ExperimentRecord.from_research(
+    name="stock_pool_factor_demo",
+    bundle=bundle,
+    factors=factor_weights,
+    top_n=10,
+    rebalance="M",
+    result=result,
+    factor_analysis=factor_analysis,
+).export_json("reports/experiment.json")
 ```
 
 内置第一批指标包括 `momentum_20`、`momentum_60`、`ma_position_20`、`ma_position_60`、`volatility_20`、`turnover_amount_20`、`drawdown_20`、`atr_ratio_14`。后续可以通过 `FactorDefinition` 注册用户自定义指标，再由 `factors={...}` 配置权重组合成选股策略。
