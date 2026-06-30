@@ -149,18 +149,28 @@ quant ml train 300751 --model random_forest
 
 ```python
 import pandas as pd
-from quant_assistant.research import SelectionResearch, FactorDefinition
+from quant_assistant import QuantAPI
+from quant_assistant.research import DataBundleBuilder, FactorDefinition, SelectionResearch
 
-# data 是多股票日线长表，至少包含：
-# symbol, trade_date, open, high, low, close, volume, amount
+api = QuantAPI()
+
+# 先构建股票池数据包。单只股票获取失败会记录到 fetch_log，
+# 可用股票仍会继续进入后续研究。
+bundle = DataBundleBuilder(data_api=api.data).build(
+    universe=["000001", "000002", "600000", "600519"],
+    start="2024-01-01",
+    end="2024-12-31",
+)
+
+print(bundle.quality.summary())
 
 def close_to_open(df: pd.DataFrame) -> pd.Series:
     return df["close"] / df["open"] - 1
 
 research = SelectionResearch(
-    universe=["000001", "000002", "600000", "600519"],
-    start="2024-01-01",
-    end="2024-12-31",
+    universe=bundle.symbols,
+    start=bundle.start,
+    end=bundle.end,
     factors={
         "momentum_20": 1.0,
         "momentum_60": 1.0,
@@ -170,7 +180,7 @@ research = SelectionResearch(
     },
     top_n=10,
     rebalance="M",
-    data=data,
+    data=bundle.panel,
 )
 
 research.register_factor(FactorDefinition(
