@@ -14,12 +14,18 @@
 
 ## 数据源选择
 
-脚本默认使用 `UnifiedDataFetcher(primary_source="auto")`，按 EFinance、AKShare、TickFlow 做自动尝试和故障切换。也可以显式指定：
+脚本把“股票列表”和“日线行情”拆成两条数据链路：
+
+- 股票列表：默认 `--stock-list-source tickflow`。当前本机试跑中，TickFlow 能稳定返回全 A 列表，可避免 `auto` 模式先尝试 EFinance/AKShare 产生前置报错日志。
+- 日线行情：默认 `--source auto`，继续使用统一数据获取器做行情源故障切换。
+
+也可以显式指定：
 
 ```bash
 python scripts/cache_ashare_daily.py --init-one-year --source akshare
 python scripts/cache_ashare_daily.py --update-latest --source efinance
 python scripts/cache_ashare_daily.py --update-latest --source tickflow
+python scripts/cache_ashare_daily.py --init-one-year --stock-list-source tickflow --source auto
 ```
 
 ## 初始化近一年全 A 日线缓存

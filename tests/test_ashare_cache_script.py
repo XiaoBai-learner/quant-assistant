@@ -25,3 +25,23 @@ def test_cache_script_dry_run_writes_report(tmp_path):
     assert report["dry_run"] is True
     assert payload["mode"] == "update_latest"
     assert payload["limit"] == 3
+    assert payload["stock_list_source"] == "tickflow"
+
+
+def test_cache_script_accepts_explicit_stock_list_source(tmp_path):
+    parser = build_parser()
+    args = parser.parse_args([
+        "--update-latest",
+        "--cache-dir",
+        str(tmp_path / "cache"),
+        "--source",
+        "akshare",
+        "--stock-list-source",
+        "tickflow",
+        "--dry-run",
+    ])
+
+    report = run(args)
+
+    assert report["source"] == "akshare"
+    assert report["stock_list_source"] == "tickflow"

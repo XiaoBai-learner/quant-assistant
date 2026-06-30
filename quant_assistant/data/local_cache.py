@@ -92,12 +92,18 @@ class AshareDailyCache:
 class AshareCacheUpdater:
     """Fetch A-share daily data and append it to local Parquet cache."""
 
-    def __init__(self, data_api: Optional[Any] = None, cache: Optional[AshareDailyCache] = None):
+    def __init__(
+        self,
+        data_api: Optional[Any] = None,
+        stock_list_api: Optional[Any] = None,
+        cache: Optional[AshareDailyCache] = None,
+    ):
         if data_api is None:
             from quant_assistant.api import QuantAPI
 
             data_api = QuantAPI().data
         self.data_api = data_api
+        self.stock_list_api = stock_list_api or data_api
         self.cache = cache or AshareDailyCache()
 
     def initialize_one_year(
@@ -181,8 +187,8 @@ class AshareCacheUpdater:
         return report
 
     def stock_symbols(self, market: str = "all") -> list[str]:
-        """Return normalized A-share symbols from the configured data API."""
-        stocks = self.data_api.get_stock_list(market=market)
+        """Return normalized A-share symbols from the configured stock-list API."""
+        stocks = self.stock_list_api.get_stock_list(market=market)
         if stocks is None or stocks.empty:
             return []
         symbol_col = self._symbol_column(stocks.columns)

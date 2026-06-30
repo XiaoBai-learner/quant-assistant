@@ -76,6 +76,35 @@ class FakeDataAPI:
         })
 
 
+class FakeDailyOnlyAPI:
+    def get_stock_list(self, market="all"):
+        raise AssertionError("daily data API should not be used for stock list")
+
+    def get_stock_data(self, symbol, start=None, end=None, adjust="qfq"):
+        return pd.DataFrame({
+            "symbol": [symbol],
+            "trade_date": pd.to_datetime([end or start]),
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "volume": [1000.0],
+            "amount": [10500.0],
+        })
+
+
+class FakeStockListAPI:
+    def __init__(self):
+        self.markets = []
+
+    def get_stock_list(self, market="all"):
+        self.markets.append(market)
+        return pd.DataFrame({
+            "symbol": ["000001", "000002"],
+            "name": ["A", "B"],
+        })
+
+
 def test_ashare_cache_updater_updates_symbols_and_records_failures(tmp_path):
     cache = AshareDailyCache(cache_dir=str(tmp_path))
     updater = AshareCacheUpdater(data_api=FakeDataAPI(), cache=cache)
@@ -87,6 +116,18 @@ def test_ashare_cache_updater_updates_symbols_and_records_failures(tmp_path):
     assert report["failed_count"] == 1
     assert report["symbols"]["600000"]["status"] == "failed"
     assert not cache.read_symbol("000001").empty
+
+
+def test_ashare_cache_updater_can_use_dedicated_stock_list_api(tmp_path):
+    cache = AshareDailyCache(cache_dir=str(tmp_path))
+    stock_list_api = FakeStockListAPI()
+    updater = AshareCacheUpdater(data_api=FakeDailyOnlyAPI(), stock_list_api=stock_list_api, cache=cache)
+
+    report = updater.update_range(start="2024-01-01", end="2024-01-01", market="sz")
+
+    assert stock_list_api.markets == ["sz"]
+    assert report["total_symbols"] == 2
+    assert report["success_count"] == 2
 
 
 def test_ashare_cache_updater_uses_previous_business_day_for_latest(tmp_path):

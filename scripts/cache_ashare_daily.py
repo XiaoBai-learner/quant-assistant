@@ -23,7 +23,13 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--update-latest", action="store_true", help="更新上一交易日 A 股日线缓存")
     parser.add_argument("--cache-dir", default=None, help="缓存目录，默认 ~/.quant_assistant/cache/ashare_daily")
     parser.add_argument("--market", default="all", choices=["all", "sh", "sz", "bj"], help="市场范围")
-    parser.add_argument("--source", default="auto", choices=["auto", "akshare", "efinance", "tickflow"], help="优先数据源")
+    parser.add_argument("--source", default="auto", choices=["auto", "akshare", "efinance", "tickflow"], help="日线行情优先数据源")
+    parser.add_argument(
+        "--stock-list-source",
+        default="tickflow",
+        choices=["auto", "akshare", "efinance", "tickflow"],
+        help="股票列表数据源，默认 tickflow 以减少列表获取阶段的无效重试",
+    )
     parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", "none"], help="复权方式")
     parser.add_argument("--end", default=None, help="初始化截止日期 YYYY-MM-DD")
     parser.add_argument("--run-date", default=None, help="增量运行日期 YYYY-MM-DD，用于计算上一交易日")
@@ -48,12 +54,17 @@ def run(args: argparse.Namespace) -> dict:
             "cache_dir": str(cache.cache_dir),
             "market": args.market,
             "source": args.source,
+            "stock_list_source": args.stock_list_source,
             "adjust": args.adjust,
             "limit": args.limit,
             "dry_run": True,
         }
     else:
-        updater = AshareCacheUpdater(data_api=create_data_api(args.source), cache=cache)
+        updater = AshareCacheUpdater(
+            data_api=create_data_api(args.source),
+            stock_list_api=create_data_api(args.stock_list_source),
+            cache=cache,
+        )
         if args.init_one_year:
             report = updater.initialize_one_year(
                 end=args.end,
@@ -71,6 +82,7 @@ def run(args: argparse.Namespace) -> dict:
             )
             report["mode"] = "update_latest"
         report["source"] = args.source
+        report["stock_list_source"] = args.stock_list_source
 
     output = Path(args.report)
     output.parent.mkdir(parents=True, exist_ok=True)
