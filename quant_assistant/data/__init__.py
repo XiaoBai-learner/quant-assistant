@@ -53,6 +53,7 @@ from quant_assistant.data.storage import MySQLStorage
 from quant_assistant.data.query import DataQueryEngine
 from quant_assistant.data.cache import DataCache, MemoryCache, CacheEntry
 from quant_assistant.data.local_cache import AshareCacheUpdater, AshareDailyCache
+from quant_assistant.data.hub import DataHub
 
 # 为向后兼容保留别名
 DataFetcher = UnifiedDataFetcher
@@ -70,6 +71,7 @@ __all__ = [
     'TickFlowFetcher',
     
     # 存储和查询
+    'DataHub',
     'MySQLStorage',
     'DataQueryEngine',
     
