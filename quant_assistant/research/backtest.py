@@ -12,11 +12,15 @@ class SelectionBacktester:
         self.commission_rate = commission_rate
         self.slippage = slippage
 
-    def run(self, prices: pd.DataFrame, holdings: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    def run(self, prices: pd.DataFrame, holdings: pd.DataFrame, execution: str = "close_return") -> Dict[str, pd.DataFrame]:
         """Run a daily portfolio backtest using next-day returns after rebalance."""
         if prices.empty or holdings.empty:
             empty = pd.DataFrame(columns=["trade_date", "daily_return", "portfolio_value"])
-            return {"daily_returns": empty, "rebalance_trades": pd.DataFrame()}
+            return {"daily_returns": empty, "rebalance_trades": pd.DataFrame(), "trade_ledger": pd.DataFrame()}
+        if execution == "next_open":
+            return self._run_next_open(prices, holdings)
+        if execution != "close_return":
+            raise ValueError("execution must be close_return or next_open")
 
         price_panel = self._prepare_returns(prices)
         dates = sorted(price_panel.index)
@@ -60,7 +64,114 @@ class SelectionBacktester:
         return {
             "daily_returns": pd.DataFrame(daily_rows),
             "rebalance_trades": pd.DataFrame(trade_rows),
+            "trade_ledger": pd.DataFrame(),
         }
+
+    def _run_next_open(self, prices: pd.DataFrame, holdings: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        price_data = self._prepare_price_data(prices)
+        dates = sorted(price_data["trade_date"].unique())
+        targets_by_execution = self._targets_by_execution_date(holdings, dates)
+        cash = float(self.initial_cash)
+        positions: Dict[str, int] = {}
+        last_value = float(self.initial_cash)
+        daily_rows = []
+        rebalance_rows = []
+        ledger_rows = []
+
+        for current_date in dates:
+            current_ts = pd.Timestamp(current_date)
+            if current_ts in targets_by_execution:
+                target_weights = targets_by_execution[current_ts]
+                portfolio_value = self._portfolio_value(price_data, current_ts, cash, positions, price_field="open")
+                previous_weights = self._position_weights(price_data, current_ts, positions, portfolio_value)
+                rebalance_rows.append({
+                    "rebalance_date": current_ts,
+                    "turnover": self._turnover(previous_weights, target_weights),
+                    "cost_rate": 0.0,
+                })
+                cash, positions, ledger = self._execute_target_weights(
+                    price_data,
+                    current_ts,
+                    cash,
+                    positions,
+                    target_weights,
+                    portfolio_value,
+                )
+                ledger_rows.extend(ledger)
+
+            close_value = self._portfolio_value(price_data, current_ts, cash, positions, price_field="close")
+            daily_return = close_value / last_value - 1 if last_value else 0.0
+            daily_rows.append({
+                "trade_date": current_ts,
+                "daily_return": daily_return,
+                "portfolio_value": close_value,
+            })
+            last_value = close_value
+
+        return {
+            "daily_returns": pd.DataFrame(daily_rows),
+            "rebalance_trades": pd.DataFrame(rebalance_rows),
+            "trade_ledger": pd.DataFrame(ledger_rows),
+        }
+
+    def _execute_target_weights(
+        self,
+        price_data: pd.DataFrame,
+        trade_date: pd.Timestamp,
+        cash: float,
+        positions: Dict[str, int],
+        target_weights: Dict[str, float],
+        portfolio_value: float,
+    ) -> tuple[float, Dict[str, int], list[dict]]:
+        ledger = []
+        symbols = sorted(set(positions) | set(target_weights))
+        current_values = {
+            symbol: positions.get(symbol, 0) * self._price_row(price_data, trade_date, symbol).get("open", 0.0)
+            for symbol in symbols
+            if self._has_price_row(price_data, trade_date, symbol)
+        }
+
+        for symbol in symbols:
+            row = self._price_row(price_data, trade_date, symbol)
+            target_value = portfolio_value * target_weights.get(symbol, 0.0)
+            current_value = current_values.get(symbol, 0.0)
+            delta_value = target_value - current_value
+            if abs(delta_value) < 1e-9:
+                continue
+            action = "buy" if delta_value > 0 else "sell"
+            if row.empty or not self._is_tradable(row):
+                ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, None, 0.0, "skipped", "non_tradable_high_equals_low"))
+                continue
+            price = float(row["open"])
+            if price <= 0 or pd.isna(price):
+                ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, None, 0.0, "skipped", "missing_execution_price"))
+                continue
+            if action == "buy":
+                available_cash = max(cash, 0.0)
+                gross_budget = min(delta_value, available_cash)
+                shares = int(gross_budget / (price * (1 + self.commission_rate + self.slippage)))
+                if shares <= 0:
+                    ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, price, 0.0, "skipped", "insufficient_cash"))
+                    continue
+                trade_value = shares * price
+                cost = trade_value * (self.commission_rate + self.slippage)
+                cash -= trade_value + cost
+                positions[symbol] = positions.get(symbol, 0) + shares
+            else:
+                shares = min(positions.get(symbol, 0), int(abs(delta_value) / price))
+                if target_weights.get(symbol, 0.0) == 0:
+                    shares = positions.get(symbol, 0)
+                if shares <= 0:
+                    ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, price, 0.0, "skipped", "no_position"))
+                    continue
+                trade_value = shares * price
+                cost = trade_value * (self.commission_rate + self.slippage)
+                cash += trade_value - cost
+                positions[symbol] = positions.get(symbol, 0) - shares
+                if positions[symbol] <= 0:
+                    positions.pop(symbol, None)
+            ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), shares, price, cost, "filled", ""))
+        return cash, positions, ledger
 
     @staticmethod
     def _prepare_returns(prices: pd.DataFrame) -> pd.DataFrame:
@@ -69,6 +180,108 @@ class SelectionBacktester:
         data = data.sort_values(["symbol", "trade_date"])
         data["symbol_return"] = data.groupby("symbol")["close"].pct_change().fillna(0.0)
         return data.pivot(index="trade_date", columns="symbol", values="symbol_return").fillna(0.0)
+
+    @staticmethod
+    def _prepare_price_data(prices: pd.DataFrame) -> pd.DataFrame:
+        data = prices.copy()
+        data["trade_date"] = pd.to_datetime(data["trade_date"])
+        for column in ["open", "high", "low", "close", "volume"]:
+            if column in data.columns:
+                data[column] = pd.to_numeric(data[column], errors="coerce")
+        return data.sort_values(["trade_date", "symbol"]).reset_index(drop=True)
+
+    @staticmethod
+    def _targets_by_execution_date(holdings: pd.DataFrame, dates: list[pd.Timestamp]) -> Dict[pd.Timestamp, Dict[str, float]]:
+        data = holdings.copy()
+        data["rebalance_date"] = pd.to_datetime(data["rebalance_date"])
+        date_index = [pd.Timestamp(date) for date in dates]
+        result = {}
+        for rebalance_date, group in data.groupby("rebalance_date", sort=True):
+            execution_date = next((date for date in date_index if date > pd.Timestamp(rebalance_date)), None)
+            if execution_date is None:
+                continue
+            result[execution_date] = dict(zip(group["symbol"], group["target_weight"]))
+        return result
+
+    @staticmethod
+    def _has_price_row(price_data: pd.DataFrame, trade_date: pd.Timestamp, symbol: str) -> bool:
+        return not price_data[(price_data["trade_date"] == trade_date) & (price_data["symbol"] == symbol)].empty
+
+    @staticmethod
+    def _price_row(price_data: pd.DataFrame, trade_date: pd.Timestamp, symbol: str) -> pd.Series:
+        rows = price_data[(price_data["trade_date"] == trade_date) & (price_data["symbol"] == symbol)]
+        if rows.empty:
+            return pd.Series(dtype=float)
+        return rows.iloc[0]
+
+    @staticmethod
+    def _is_tradable(row: pd.Series) -> bool:
+        if row.empty:
+            return False
+        if pd.isna(row.get("open")) or pd.isna(row.get("high")) or pd.isna(row.get("low")):
+            return False
+        if row.get("high") == row.get("low"):
+            return False
+        if row.get("volume", 1) == 0:
+            return False
+        return True
+
+    def _portfolio_value(
+        self,
+        price_data: pd.DataFrame,
+        trade_date: pd.Timestamp,
+        cash: float,
+        positions: Dict[str, int],
+        price_field: str,
+    ) -> float:
+        value = cash
+        for symbol, shares in positions.items():
+            row = self._price_row(price_data, trade_date, symbol)
+            if row.empty or pd.isna(row.get(price_field)):
+                continue
+            value += shares * float(row[price_field])
+        return value
+
+    def _position_weights(
+        self,
+        price_data: pd.DataFrame,
+        trade_date: pd.Timestamp,
+        positions: Dict[str, int],
+        portfolio_value: float,
+    ) -> Dict[str, float]:
+        if portfolio_value <= 0:
+            return {}
+        weights = {}
+        for symbol, shares in positions.items():
+            row = self._price_row(price_data, trade_date, symbol)
+            if row.empty or pd.isna(row.get("open")):
+                continue
+            weights[symbol] = shares * float(row["open"]) / portfolio_value
+        return weights
+
+    @staticmethod
+    def _ledger_row(
+        trade_date: pd.Timestamp,
+        symbol: str,
+        action: str,
+        requested_weight: float,
+        shares: int,
+        price: float | None,
+        cost: float,
+        status: str,
+        reason: str,
+    ) -> dict:
+        return {
+            "trade_date": pd.Timestamp(trade_date),
+            "action": action,
+            "symbol": symbol,
+            "requested_weight": requested_weight,
+            "shares": shares,
+            "price": price,
+            "commission_slippage": cost,
+            "status": status,
+            "reason": reason,
+        }
 
     @staticmethod
     def _holdings_by_rebalance(holdings: pd.DataFrame) -> Dict[pd.Timestamp, Dict[str, float]]:

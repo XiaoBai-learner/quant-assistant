@@ -8,6 +8,7 @@ from .factors import FactorCalculator, FactorDefinition, builtin_factor_definiti
 from .panel import DataBundle, DataBundleBuilder
 from .report import ResearchReport
 from .result import SelectionResearchResult
+from .strategy_candidates import StrategyCandidate, StrategyCandidateRunner, default_strategy_candidates
 from .universe import Universe
 from .workflow import SelectionResearch
 
@@ -28,8 +29,11 @@ __all__ = [
     "FactorDefinition",
     "SelectionResearch",
     "SymbolDataQuality",
+    "StrategyCandidate",
+    "StrategyCandidateRunner",
     "Universe",
     "builtin_factor_definitions",
     "daily_feature_definitions",
+    "default_strategy_candidates",
     "feature_quality_report",
 ]
