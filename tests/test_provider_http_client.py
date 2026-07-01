@@ -48,3 +48,54 @@ def test_http_client_get_json_uses_timeout_and_headers():
     assert payload == {"ok": True}
     assert session.calls[0][1]["timeout"] == 3.0
     assert session.calls[0][1]["headers"]["User-Agent"] == "qa-test"
+
+
+class FlakySession:
+    def __init__(self):
+        self.calls = 0
+
+    def get(self, url, **kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            raise TimeoutError("temporary timeout")
+        return FakeResponse()
+
+
+class HTTP500Response(FakeResponse):
+    status_code = 500
+
+    def raise_for_status(self):
+        raise RuntimeError("500 server error")
+
+
+class RecoveringHTTP500Session:
+    def __init__(self):
+        self.calls = 0
+
+    def get(self, url, **kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            return HTTP500Response()
+        return FakeResponse()
+
+
+def test_http_client_retries_transient_network_errors():
+    session = FlakySession()
+    sleeps = []
+    client = HTTPClient(session=session, retries=1, backoff=0.5, sleep=sleeps.append)
+
+    payload = client.get_json("https://example.test/api")
+
+    assert payload == {"ok": True}
+    assert session.calls == 2
+    assert sleeps == [0.5]
+
+
+def test_http_client_retries_retryable_http_status_errors():
+    session = RecoveringHTTP500Session()
+    client = HTTPClient(session=session, retries=1, backoff=0.1, sleep=lambda seconds: None)
+
+    payload = client.get_json("https://example.test/api")
+
+    assert payload == {"ok": True}
+    assert session.calls == 2

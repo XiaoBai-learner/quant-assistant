@@ -1,7 +1,8 @@
 """Shared HTTP client for provider requests."""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import time
+from typing import Any, Callable, Dict, Optional
 
 import requests
 
@@ -10,7 +11,7 @@ from quant_assistant.data.providers.rate_limiter import SerialRateLimiter
 
 
 class HTTPClient:
-    """Small requests wrapper with timeout, headers, and optional limiter."""
+    """Small requests wrapper with timeout, headers, limiter, and retries."""
 
     def __init__(
         self,
@@ -18,6 +19,10 @@ class HTTPClient:
         timeout: float = 10.0,
         headers: Optional[Dict[str, str]] = None,
         limiter: Optional[SerialRateLimiter] = None,
+        retries: int = 2,
+        backoff: float = 0.5,
+        retry_statuses: Optional[set[int]] = None,
+        sleep: Callable[[float], None] = time.sleep,
     ):
         self.session = session or requests.Session()
         self.timeout = timeout
@@ -25,6 +30,10 @@ class HTTPClient:
             "User-Agent": "Mozilla/5.0 quant-assistant/1.0",
         }
         self.limiter = limiter
+        self.retries = max(0, retries)
+        self.backoff = max(0.0, backoff)
+        self.retry_statuses = retry_statuses or {429, 500, 502, 503, 504}
+        self.sleep = sleep
 
     def get_text(
         self,
@@ -55,17 +64,27 @@ class HTTPClient:
         params: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
     ):
-        if self.limiter is not None:
-            self.limiter.wait()
         request_headers = {**self.headers, **(headers or {})}
-        response = self.session.get(
-            url,
-            params=params,
-            timeout=self.timeout,
-            headers=request_headers,
-        )
-        try:
-            response.raise_for_status()
-        except Exception as exc:  # noqa: BLE001 - requests raises several HTTP exception types
-            raise ProviderHTTPError(str(exc)) from exc
-        return response
+        last_error: Exception | None = None
+        for attempt in range(self.retries + 1):
+            if self.limiter is not None:
+                self.limiter.wait()
+            try:
+                response = self.session.get(
+                    url,
+                    params=params,
+                    timeout=self.timeout,
+                    headers=request_headers,
+                )
+                response.raise_for_status()
+                return response
+            except Exception as exc:  # noqa: BLE001 - requests raises heterogeneous network errors
+                last_error = exc
+                status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                response_status = getattr(locals().get("response", None), "status_code", None)
+                retryable_status = status_code in self.retry_statuses or response_status in self.retry_statuses
+                retryable_network = status_code is None and response_status is None
+                if attempt >= self.retries or not (retryable_status or retryable_network):
+                    raise ProviderHTTPError(str(exc)) from exc
+                self.sleep(self.backoff * (2 ** attempt))
+        raise ProviderHTTPError(str(last_error))
