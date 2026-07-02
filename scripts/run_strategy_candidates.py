@@ -45,15 +45,18 @@ def run(args: argparse.Namespace) -> dict:
     feature_wide = _load_feature_wide(args)
     strategy_names = _parse_strategy_names(args.strategies)
     candidates = _select_candidates(strategy_names)
+    runnable_candidates, skipped_strategies = _split_runnable_candidates(feature_wide, candidates)
     report = {
         "start": args.start,
         "end": args.end,
         "feature_wide": args.feature_wide,
         "strategy_names": [candidate.name for candidate in candidates],
+        "runnable_strategy_names": [candidate.name for candidate in runnable_candidates],
         "input_rows": int(len(feature_wide)),
         "input_symbols": int(feature_wide["symbol"].nunique()) if not feature_wide.empty else 0,
         "dry_run": bool(args.dry_run),
         "strategies": {},
+        "skipped_strategies": skipped_strategies,
     }
     if args.dry_run:
         return report
@@ -61,12 +64,12 @@ def run(args: argparse.Namespace) -> dict:
     output_dir = Path(args.output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
     rebalance_features = _rebalance_slice(feature_wide, args.rebalance_step)
-    selections_by_strategy = StrategyCandidateRunner(candidates).run(rebalance_features)
+    selections_by_strategy = StrategyCandidateRunner(runnable_candidates).run(rebalance_features)
     evaluator = SelectionEvaluator()
     portfolio = PortfolioConstructor(max_weight=args.max_weight)
     summary_rows = []
 
-    for candidate in candidates:
+    for candidate in runnable_candidates:
         selections = selections_by_strategy[candidate.name]
         holdings = portfolio.construct(selections)
         backtest = SelectionBacktester(
@@ -134,6 +137,23 @@ def _select_candidates(names: Optional[list[str]]):
     if missing:
         raise ValueError(f"未知策略候选: {', '.join(missing)}")
     return [candidates[name] for name in names]
+
+
+def _split_runnable_candidates(feature_wide: pd.DataFrame, candidates) -> tuple[list, dict]:
+    available_columns = set(feature_wide.columns)
+    runnable = []
+    skipped = {}
+    for candidate in candidates:
+        required = {"trade_date", "symbol", *candidate.required_columns, *candidate.factor_weights.keys()}
+        missing = sorted(required - available_columns)
+        if missing:
+            skipped[candidate.name] = {
+                "reason": "missing_columns",
+                "missing_columns": missing,
+            }
+            continue
+        runnable.append(candidate)
+    return runnable, skipped
 
 
 def _rebalance_slice(feature_wide: pd.DataFrame, rebalance_step: int) -> pd.DataFrame:

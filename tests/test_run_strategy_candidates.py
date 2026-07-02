@@ -92,3 +92,29 @@ def test_run_strategy_candidates_dry_run_reports_selected_strategies(tmp_path):
     assert report["dry_run"] is True
     assert report["strategy_names"] == ["trend_momentum"]
     assert not (tmp_path / "strategy_runs").exists()
+
+
+def test_run_strategy_candidates_skips_strategies_with_missing_columns(tmp_path):
+    feature_path = tmp_path / "feature_wide.parquet"
+    make_feature_wide(feature_path)
+    data = pd.read_parquet(feature_path).drop(columns=["fund_flow_score", "main_net_inflow"])
+    data.to_parquet(feature_path, index=False)
+
+    report = run(Namespace(
+        feature_wide=str(feature_path),
+        daily_cache_dir="",
+        extended_cache_dir="",
+        start="2024-01-01",
+        end="2024-01-10",
+        output_dir=str(tmp_path / "strategy_runs"),
+        initial_cash=300000.0,
+        commission_rate=0.0,
+        slippage=0.0,
+        max_weight=0.5,
+        rebalance_step=3,
+        strategies="trend_momentum,capital_flow",
+        dry_run=False,
+    ))
+
+    assert set(report["strategies"].keys()) == {"trend_momentum"}
+    assert report["skipped_strategies"]["capital_flow"]["missing_columns"] == ["fund_flow_score", "main_net_inflow"]

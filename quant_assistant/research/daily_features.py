@@ -28,6 +28,7 @@ def daily_feature_definitions() -> dict[str, DailyFeatureDefinition]:
         DailyFeatureDefinition("return_1d", "daily", "neutral", "one-day close return"),
         DailyFeatureDefinition("momentum_5", "daily", "positive", "5-day close momentum"),
         DailyFeatureDefinition("momentum_20", "daily", "positive", "20-day close momentum"),
+        DailyFeatureDefinition("drawdown_20", "daily", "negative", "20-day close drawdown from rolling high"),
         DailyFeatureDefinition("volatility_20", "daily", "negative", "20-day return volatility"),
         DailyFeatureDefinition("atr_ratio_14", "daily", "negative", "ATR14 divided by close"),
         DailyFeatureDefinition("amount_ma_20", "daily", "positive", "20-day average turnover amount"),
@@ -81,6 +82,8 @@ class DailyFeatureWideBuilder:
             frame["return_1d"] = frame["close"].pct_change()
             frame["momentum_5"] = frame["close"] / frame["close"].shift(5) - 1
             frame["momentum_20"] = frame["close"] / frame["close"].shift(20) - 1
+            rolling_high_20 = frame["close"].rolling(20, min_periods=20).max()
+            frame["drawdown_20"] = frame["close"] / rolling_high_20 - 1
             frame["volatility_20"] = frame["return_1d"].rolling(20, min_periods=20).std()
             frame["amount_ma_20"] = frame["amount"].rolling(20, min_periods=20).mean()
             frame["volume_ratio_5"] = frame["volume"] / frame["volume"].rolling(5, min_periods=5).mean()

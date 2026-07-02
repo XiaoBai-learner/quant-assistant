@@ -45,3 +45,23 @@ def test_cache_script_accepts_explicit_stock_list_source(tmp_path):
 
     assert report["source"] == "akshare"
     assert report["stock_list_source"] == "tickflow"
+
+
+def test_cache_script_dry_run_reports_explicit_symbols(tmp_path):
+    parser = build_parser()
+    args = parser.parse_args([
+        "--update-range",
+        "--start",
+        "2024-01-01",
+        "--end",
+        "2024-01-02",
+        "--symbols",
+        "000001,600000.SH",
+        "--cache-dir",
+        str(tmp_path / "cache"),
+        "--dry-run",
+    ])
+
+    report = run(args)
+
+    assert report["symbols"] == ["000001", "600000.SH"]

@@ -81,6 +81,55 @@ def test_build_daily_feature_wide_writes_parquet_and_report(tmp_path):
     output_path = tmp_path / "features" / "date_range=2024-01-01_2024-02-05.parquet"
     assert output_path.exists()
     feature_data = pd.read_parquet(output_path)
-    assert {"momentum_20", "is_tradable_next_day"}.issubset(feature_data.columns)
+    assert {"momentum_20", "drawdown_20", "is_tradable_next_day"}.issubset(feature_data.columns)
+    assert feature_data["drawdown_20"].notna().any()
     assert report["quality"]["symbol_count"] == 2
     assert report["output_path"] == str(output_path)
+
+
+def test_build_daily_feature_wide_filters_weekend_rows(tmp_path):
+    cache_dir = tmp_path / "daily"
+    cache_dir.mkdir()
+    write_symbol(cache_dir, "920001.BJ", pd.to_datetime(["2026-01-23", "2026-01-25", "2026-01-26"]))
+
+    report = run(Namespace(
+        daily_cache_dir=str(cache_dir),
+        extended_cache_dir=str(tmp_path / "extended"),
+        output_dir=str(tmp_path / "features"),
+        start="2026-01-23",
+        end="2026-01-26",
+        symbols="",
+        report=str(tmp_path / "report.json"),
+        dry_run=False,
+    ))
+
+    feature_data = pd.read_parquet(report["output_path"])
+
+    assert pd.Timestamp("2026-01-25") not in set(pd.to_datetime(feature_data["trade_date"]))
+    assert report["warnings"] == ["过滤非工作日行情行: 1"]
+
+
+def test_build_daily_feature_wide_filters_low_coverage_market_dates(tmp_path):
+    cache_dir = tmp_path / "daily"
+    cache_dir.mkdir()
+    normal_date = pd.Timestamp("2026-04-03")
+    low_coverage_date = pd.Timestamp("2026-04-06")
+    for i in range(20):
+        write_symbol(cache_dir, f"000{i:03d}.SZ", [normal_date])
+    write_symbol(cache_dir, "920001.BJ", [normal_date, low_coverage_date])
+
+    report = run(Namespace(
+        daily_cache_dir=str(cache_dir),
+        extended_cache_dir=str(tmp_path / "extended"),
+        output_dir=str(tmp_path / "features"),
+        start="2026-04-03",
+        end="2026-04-06",
+        symbols="",
+        report=str(tmp_path / "report.json"),
+        dry_run=False,
+    ))
+
+    feature_data = pd.read_parquet(report["output_path"])
+
+    assert low_coverage_date not in set(pd.to_datetime(feature_data["trade_date"]))
+    assert report["warnings"] == ["过滤低覆盖交易日: 1 天, 1 行"]

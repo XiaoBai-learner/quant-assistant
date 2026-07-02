@@ -55,6 +55,9 @@ def test_ashare_daily_cache_reports_symbol_stats(tmp_path):
 
 
 class FakeDataAPI:
+    def __init__(self):
+        self.requested_symbols = []
+
     def get_stock_list(self, market="all"):
         return pd.DataFrame({
             "symbol": ["000001", "600000", "300001"],
@@ -62,7 +65,8 @@ class FakeDataAPI:
         })
 
     def get_stock_data(self, symbol, start=None, end=None, adjust="qfq"):
-        if symbol == "600000":
+        self.requested_symbols.append(symbol)
+        if symbol == "600000.SH":
             raise RuntimeError("source unavailable")
         return pd.DataFrame({
             "symbol": [symbol],
@@ -100,8 +104,8 @@ class FakeStockListAPI:
     def get_stock_list(self, market="all"):
         self.markets.append(market)
         return pd.DataFrame({
-            "symbol": ["000001", "000002"],
-            "name": ["A", "B"],
+            "symbol": ["000001", "000002.SZ", "000002.SH", "515483", "563180", "688001", "920002"],
+            "name": ["A", "B", "WrongSuffix", "ETF", "FUND", "STAR", "BJ"],
         })
 
 
@@ -114,8 +118,8 @@ def test_ashare_cache_updater_updates_symbols_and_records_failures(tmp_path):
     assert report["total_symbols"] == 3
     assert report["success_count"] == 2
     assert report["failed_count"] == 1
-    assert report["symbols"]["600000"]["status"] == "failed"
-    assert not cache.read_symbol("000001").empty
+    assert report["symbols"]["600000.SH"]["status"] == "failed"
+    assert not cache.read_symbol("000001.SZ").empty
 
 
 def test_ashare_cache_updater_can_use_dedicated_stock_list_api(tmp_path):
@@ -126,8 +130,29 @@ def test_ashare_cache_updater_can_use_dedicated_stock_list_api(tmp_path):
     report = updater.update_range(start="2024-01-01", end="2024-01-01", market="sz")
 
     assert stock_list_api.markets == ["sz"]
-    assert report["total_symbols"] == 2
-    assert report["success_count"] == 2
+    assert report["total_symbols"] == 4
+    assert report["success_count"] == 4
+
+
+def test_ashare_cache_updater_filters_stock_list_to_real_a_share_symbols(tmp_path):
+    cache = AshareDailyCache(cache_dir=str(tmp_path))
+    stock_list_api = FakeStockListAPI()
+    updater = AshareCacheUpdater(data_api=FakeDailyOnlyAPI(), stock_list_api=stock_list_api, cache=cache)
+
+    symbols = updater.stock_symbols(market="all")
+
+    assert symbols == ["000001.SZ", "000002.SZ", "688001.SH", "920002.BJ"]
+
+
+def test_ashare_cache_updater_canonicalizes_a_share_exchange_suffixes(tmp_path):
+    cache = AshareDailyCache(cache_dir=str(tmp_path))
+    stock_list_api = FakeStockListAPI()
+    updater = AshareCacheUpdater(data_api=FakeDailyOnlyAPI(), stock_list_api=stock_list_api, cache=cache)
+
+    symbols = updater.stock_symbols(market="all")
+
+    assert "000002.SH" not in symbols
+    assert symbols == ["000001.SZ", "000002.SZ", "688001.SH", "920002.BJ"]
 
 
 def test_ashare_cache_updater_uses_previous_business_day_for_latest(tmp_path):
@@ -139,3 +164,30 @@ def test_ashare_cache_updater_uses_previous_business_day_for_latest(tmp_path):
     assert report["start"] == "2024-01-05"
     assert report["end"] == "2024-01-05"
     assert report["date_rule"] == "previous_business_day"
+
+
+def test_ashare_cache_updater_initializes_configurable_year_window(tmp_path):
+    cache = AshareDailyCache(cache_dir=str(tmp_path))
+    updater = AshareCacheUpdater(data_api=FakeDataAPI(), cache=cache)
+
+    report = updater.initialize_years(end="2026-07-02", years=2, limit=1)
+
+    assert report["start"] == "2024-07-02"
+    assert report["end"] == "2026-07-02"
+    assert report["total_symbols"] == 1
+
+
+def test_ashare_cache_updater_updates_explicit_symbols_without_stock_list(tmp_path):
+    cache = AshareDailyCache(cache_dir=str(tmp_path))
+    data_api = FakeDataAPI()
+    updater = AshareCacheUpdater(data_api=data_api, cache=cache)
+
+    report = updater.update_range(
+        start="2024-01-01",
+        end="2024-01-01",
+        symbols=["000001.SH", "600000", "980001.SZ"],
+    )
+
+    assert report["total_symbols"] == 2
+    assert data_api.requested_symbols == ["000001.SZ", "600000.SH"]
+    assert "980001.SZ" not in report["symbols"]

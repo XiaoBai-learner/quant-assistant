@@ -112,6 +112,7 @@ class AshareCacheUpdater:
         market: str = "all",
         adjust: str = "qfq",
         limit: Optional[int] = None,
+        symbols: Optional[Iterable[str]] = None,
     ) -> Dict[str, Any]:
         """Initialize cache with the latest one year of A-share daily data."""
         end_date = pd.Timestamp(end or pd.Timestamp.today().date())
@@ -122,6 +123,30 @@ class AshareCacheUpdater:
             market=market,
             adjust=adjust,
             limit=limit,
+            symbols=symbols,
+        )
+
+    def initialize_years(
+        self,
+        end: Optional[str] = None,
+        years: int = 2,
+        market: str = "all",
+        adjust: str = "qfq",
+        limit: Optional[int] = None,
+        symbols: Optional[Iterable[str]] = None,
+    ) -> Dict[str, Any]:
+        """Initialize cache with a configurable latest-year window."""
+        if years <= 0:
+            raise ValueError("years 必须大于 0")
+        end_date = pd.Timestamp(end or pd.Timestamp.today().date())
+        start_date = end_date - pd.DateOffset(years=years)
+        return self.update_range(
+            start=start_date.date().isoformat(),
+            end=end_date.date().isoformat(),
+            market=market,
+            adjust=adjust,
+            limit=limit,
+            symbols=symbols,
         )
 
     def update_latest(
@@ -130,6 +155,7 @@ class AshareCacheUpdater:
         market: str = "all",
         adjust: str = "qfq",
         limit: Optional[int] = None,
+        symbols: Optional[Iterable[str]] = None,
     ) -> Dict[str, Any]:
         """Update cache for the previous business day."""
         target_date = self.previous_business_day(run_date)
@@ -139,6 +165,7 @@ class AshareCacheUpdater:
             market=market,
             adjust=adjust,
             limit=limit,
+            symbols=symbols,
         )
         report["date_rule"] = "previous_business_day"
         return report
@@ -150,9 +177,10 @@ class AshareCacheUpdater:
         market: str = "all",
         adjust: str = "qfq",
         limit: Optional[int] = None,
+        symbols: Optional[Iterable[str]] = None,
     ) -> Dict[str, Any]:
         """Fetch a date range for all selected A-share symbols."""
-        symbols = self.stock_symbols(market=market)
+        symbols = self._canonical_symbols(symbols) if symbols is not None else self.stock_symbols(market=market)
         if limit is not None:
             symbols = symbols[:limit]
 
@@ -196,11 +224,22 @@ class AshareCacheUpdater:
         symbols = []
         seen = set()
         for value in values:
-            symbol = str(value).strip()
+            symbol = self._canonical_a_share_symbol(value)
             if symbol and symbol not in seen:
                 seen.add(symbol)
                 symbols.append(symbol)
         return symbols
+
+    def _canonical_symbols(self, symbols: Iterable[str]) -> list[str]:
+        """Return canonical A-share symbols and drop unsupported instruments."""
+        normalized = []
+        seen = set()
+        for value in symbols:
+            symbol = self._canonical_a_share_symbol(value)
+            if symbol and symbol not in seen:
+                seen.add(symbol)
+                normalized.append(symbol)
+        return normalized
 
     @staticmethod
     def previous_business_day(run_date: Optional[str] = None) -> str:
@@ -215,3 +254,22 @@ class AshareCacheUpdater:
             if candidate in columns:
                 return candidate
         raise ValueError("股票列表缺少 symbol/code 字段")
+
+    @staticmethod
+    def _is_a_share_stock_symbol(symbol: str) -> bool:
+        return AshareCacheUpdater._canonical_a_share_symbol(symbol) is not None
+
+    @staticmethod
+    def _canonical_a_share_symbol(symbol: Any) -> Optional[str]:
+        code = str(symbol).strip().split(".")[0].lower()
+        if code.startswith(("sh", "sz", "bj")):
+            code = code[2:]
+        if len(code) != 6 or not code.isdigit():
+            return None
+        if code.startswith(("000", "001", "002", "003", "300", "301")):
+            return f"{code}.SZ"
+        if code.startswith(("600", "601", "603", "605", "688", "689")):
+            return f"{code}.SH"
+        if code.startswith(("43", "83", "87", "88", "92")):
+            return f"{code}.BJ"
+        return None

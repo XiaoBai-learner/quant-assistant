@@ -51,6 +51,15 @@ def run(args: argparse.Namespace) -> dict:
         warnings.append("日线缓存目录不存在")
     else:
         market = _read_market_cache(daily_cache_dir, args.start, args.end, symbols)
+    if not market.empty:
+        before_rows = len(market)
+        market = market[pd.to_datetime(market["trade_date"]).dt.weekday < 5].copy()
+        filtered_rows = before_rows - len(market)
+        if filtered_rows:
+            warnings.append(f"过滤非工作日行情行: {filtered_rows}")
+        market, coverage_warning = _filter_low_coverage_dates(market)
+        if coverage_warning:
+            warnings.append(coverage_warning)
     report = {
         "start": args.start,
         "end": args.end,
@@ -109,6 +118,23 @@ def _read_market_cache(cache_dir: Path, start: str, end: str, symbols: Optional[
     if not frames:
         return pd.DataFrame(columns=DailyFeatureWideBuilder.required_market_columns)
     return pd.concat(frames, ignore_index=True)
+
+
+def _filter_low_coverage_dates(market: pd.DataFrame) -> tuple[pd.DataFrame, Optional[str]]:
+    if market.empty:
+        return market, None
+    counts = market.groupby("trade_date")["symbol"].nunique()
+    if len(counts) < 2:
+        return market, None
+    median_count = counts.median()
+    threshold = max(1, int(median_count * 0.5))
+    low_dates = counts[counts < threshold].index
+    if len(low_dates) == 0:
+        return market, None
+    filtered = market[~market["trade_date"].isin(low_dates)].copy()
+    removed_rows = len(market) - len(filtered)
+    warning = f"过滤低覆盖交易日: {len(low_dates)} 天, {removed_rows} 行"
+    return filtered, warning
 
 
 def _read_first_available_extended(
