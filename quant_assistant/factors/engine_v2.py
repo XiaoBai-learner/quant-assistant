@@ -14,10 +14,15 @@
 - 实时类：实时换手率, 实时涨速, 实时量比等
 """
 
+import logging
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
+
+from quant_assistant.factors import indicators
+
+logger = logging.getLogger(__name__)
 
 
 class TimeGranularity(Enum):
@@ -172,7 +177,7 @@ class FactorEngineV2:
         if granularity is None:
             granularity = self.detect_granularity(df)
         
-        print(f"检测到数据粒度: {granularity.value}")
+        logger.debug("检测到数据粒度: %s", granularity.value)
         
         # 根据粒度选择因子
         if granularity == TimeGranularity.DAILY:
@@ -402,110 +407,88 @@ class FactorEngineV2:
     def _compute_trend_factors(self, df: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
         """计算趋势类因子"""
         for window in windows:
-            df[f'ma{window}'] = df['close'].rolling(window, min_periods=1).mean()
-            df[f'ema{window}'] = df['close'].ewm(span=window, adjust=False).mean()
-        
+            df[f'ma{window}'] = indicators.ma(df['close'], window)
+            df[f'ema{window}'] = indicators.ema(df['close'], window)
+
         # 均线差值和比值
         df['ma5_10_diff'] = df['ma5'] - df['ma10']
         df['ma10_20_diff'] = df['ma10'] - df['ma20']
         df['ma20_60_diff'] = df['ma20'] - df['ma60']
         df['ma5_10_ratio'] = df['ma5'] / df['ma10']
         df['ma10_20_ratio'] = df['ma10'] / df['ma20']
-        
+
         # MACD
-        ema_fast = df['close'].ewm(span=12, adjust=False).mean()
-        ema_slow = df['close'].ewm(span=26, adjust=False).mean()
-        df['macd'] = ema_fast - ema_slow
-        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-        df['macd_hist'] = df['macd'] - df['macd_signal']
-        
+        macd = indicators.macd(df['close'])
+        df['macd'] = macd['macd']
+        df['macd_signal'] = macd['signal']
+        df['macd_hist'] = macd['histogram']
+
         return df
-    
+
     def _compute_momentum_factors(self, df: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
         """计算动量类因子"""
         for window in windows:
-            delta = df['close'].diff()
-            gain = delta.where(delta > 0, 0).rolling(window, min_periods=1).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window, min_periods=1).mean()
-            rs = gain / loss
-            df[f'rsi{window}'] = 100 - (100 / (1 + rs))
-        
+            df[f'rsi{window}'] = indicators.rsi(df['close'], window)
+
         # KDJ
-        low_list = df['low'].rolling(window=9, min_periods=1).min()
-        high_list = df['high'].rolling(window=9, min_periods=1).max()
-        rsv = (df['close'] - low_list) / (high_list - low_list) * 100
-        df['kdj_k'] = rsv.ewm(com=2, adjust=False).mean()
-        df['kdj_d'] = df['kdj_k'].ewm(com=2, adjust=False).mean()
-        df['kdj_j'] = 3 * df['kdj_k'] - 2 * df['kdj_d']
-        
+        kdj = indicators.kdj(df, 9, 3, 3)
+        df['kdj_k'] = kdj['k']
+        df['kdj_d'] = kdj['d']
+        df['kdj_j'] = kdj['j']
+
         # CCI
-        tp = (df['high'] + df['low'] + df['close']) / 3
-        ma_tp = tp.rolling(window=20, min_periods=1).mean()
-        md_tp = tp.rolling(window=20, min_periods=1).apply(
-            lambda x: np.abs(x - x.mean()).mean(), raw=True)
-        df['cci20'] = (tp - ma_tp) / (0.015 * md_tp)
-        
+        df['cci20'] = indicators.cci(df, 20, min_periods=1)
+
         # 威廉指标
-        highest_high = df['high'].rolling(window=14, min_periods=1).max()
-        lowest_low = df['low'].rolling(window=14, min_periods=1).min()
-        df['wr14'] = -100 * (highest_high - df['close']) / (highest_high - lowest_low)
-        
+        df['wr14'] = indicators.williams_r(df, 14, min_periods=1)
+
         # 动量和ROC
         for window in [10, 20]:
             df[f'mom{window}'] = df['close'] - df['close'].shift(window)
             df[f'roc{window}'] = (df['close'] / df['close'].shift(window) - 1) * 100
-        
+
         return df
-    
+
     def _compute_volatility_factors(self, df: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
         """计算波动率类因子"""
         for window in windows:
-            middle = df['close'].rolling(window, min_periods=1).mean()
-            std = df['close'].rolling(window, min_periods=1).std()
-            df[f'boll_upper_{window}'] = middle + 2 * std
+            boll = indicators.bollinger(df['close'], window, 2)
+            middle, upper, lower = boll['middle'], boll['upper'], boll['lower']
+            std = (upper - middle) / 2
+            df[f'boll_upper_{window}'] = upper
             df[f'boll_middle_{window}'] = middle
-            df[f'boll_lower_{window}'] = middle - 2 * std
+            df[f'boll_lower_{window}'] = lower
             df[f'boll_width_{window}'] = 4 * std / middle
-            df[f'boll_position_{window}'] = (df['close'] - (middle - 2 * std)) / (4 * std + 1e-10)
-        
+            df[f'boll_position_{window}'] = (df['close'] - lower) / (4 * std + 1e-10)
+
         # ATR
-        high_low = df['high'] - df['low']
-        high_close = np.abs(df['high'] - df['close'].shift())
-        low_close = np.abs(df['low'] - df['close'].shift())
-        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        df['atr14'] = tr.rolling(14, min_periods=1).mean()
+        df['atr14'] = indicators.atr(df, 14, min_periods=1)
         df['atr_ratio_14'] = df['atr14'] / df['close']
-        
+
         # 历史波动率
         for window in [20, 60]:
             df[f'volatility_{window}'] = df['close'].pct_change().rolling(window, min_periods=1).std() * np.sqrt(252)
-        
+
         return df
-    
+
     def _compute_volume_price_factors(self, df: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
         """计算量价类因子"""
         for window in windows:
             df[f'volume_ma{window}'] = df['volume'].rolling(window, min_periods=1).mean()
-        
+
         df['volume_ratio'] = df['volume'] / df['volume_ma20']
         df['volume_change'] = df['volume'].pct_change()
-        
+
         df['amount'] = df['close'] * df['volume']
         for window in windows:
             df[f'amount_ma{window}'] = df['amount'].rolling(window, min_periods=1).mean()
-        
+
         df['price_volume_corr'] = df['close'].rolling(20, min_periods=1).corr(df['volume'])
-        df['obv'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
-        
+        df['obv'] = indicators.obv(df)
+
         # MFI
-        typical_price = (df['high'] + df['low'] + df['close']) / 3
-        raw_money_flow = typical_price * df['volume']
-        money_flow = raw_money_flow.where(typical_price > typical_price.shift(), -raw_money_flow)
-        positive_flow = money_flow.where(money_flow > 0, 0).rolling(14, min_periods=1).sum()
-        negative_flow = np.abs(money_flow.where(money_flow < 0, 0)).rolling(14, min_periods=1).sum()
-        money_ratio = positive_flow / (negative_flow + 1e-10)
-        df['mfi14'] = 100 - (100 / (1 + money_ratio))
-        
+        df['mfi14'] = indicators.mfi(df, 14, min_periods=1, eps=1e-10)
+
         return df
     
     def _compute_pattern_factors(self, df: pd.DataFrame, windows: List[int]) -> pd.DataFrame:

@@ -8,36 +8,20 @@ import pandas as pd
 import numpy as np
 from typing import Dict
 
+from quant_assistant.factors import indicators
+
 
 class FactorEngine:
     """因子计算引擎"""
-    
+
     def ma(self, series: pd.Series, window: int = 20) -> pd.Series:
-        """
-        计算简单移动平均线
-        
-        Args:
-            series: 价格序列
-            window: 窗口大小
-            
-        Returns:
-            MA序列
-        """
-        return series.rolling(window=window, min_periods=1).mean()
-    
+        """计算简单移动平均线"""
+        return indicators.ma(series, window)
+
     def ema(self, series: pd.Series, window: int = 20) -> pd.Series:
-        """
-        计算指数移动平均线
-        
-        Args:
-            series: 价格序列
-            window: 窗口大小
-            
-        Returns:
-            EMA序列
-        """
-        return series.ewm(span=window, adjust=False).mean()
-    
+        """计算指数移动平均线"""
+        return indicators.ema(series, window)
+
     def macd(
         self,
         series: pd.Series,
@@ -45,76 +29,22 @@ class FactorEngine:
         slow: int = 26,
         signal: int = 9
     ) -> Dict[str, pd.Series]:
-        """
-        计算MACD指标
-        
-        Args:
-            series: 价格序列
-            fast: 快线周期
-            slow: 慢线周期
-            signal: 信号线周期
-            
-        Returns:
-            {'macd': ..., 'signal': ..., 'histogram': ...}
-        """
-        ema_fast = self.ema(series, fast)
-        ema_slow = self.ema(series, slow)
-        macd_line = ema_fast - ema_slow
-        signal_line = self.ema(macd_line, signal)
-        histogram = macd_line - signal_line
-        
-        return {
-            'macd': macd_line,
-            'signal': signal_line,
-            'histogram': histogram
-        }
-    
+        """计算MACD指标，返回 {'macd', 'signal', 'histogram'}"""
+        return indicators.macd(series, fast, slow, signal)
+
     def rsi(self, series: pd.Series, window: int = 14) -> pd.Series:
-        """
-        计算RSI指标
-        
-        Args:
-            series: 价格序列
-            window: 窗口大小
-            
-        Returns:
-            RSI序列
-        """
-        delta = series.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=window, min_periods=1).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=window, min_periods=1).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-    
+        """计算RSI指标"""
+        return indicators.rsi(series, window)
+
     def bollinger(
         self,
         series: pd.Series,
         window: int = 20,
         std: int = 2
     ) -> Dict[str, pd.Series]:
-        """
-        计算布林带
-        
-        Args:
-            series: 价格序列
-            window: 窗口大小
-            std: 标准差倍数
-            
-        Returns:
-            {'upper': ..., 'middle': ..., 'lower': ...}
-        """
-        middle = self.ma(series, window)
-        rolling_std = series.rolling(window=window, min_periods=1).std()
-        upper = middle + (rolling_std * std)
-        lower = middle - (rolling_std * std)
-        
-        return {
-            'upper': upper,
-            'middle': middle,
-            'lower': lower
-        }
-    
+        """计算布林带，返回 {'upper', 'middle', 'lower'}"""
+        return indicators.bollinger(series, window, std)
+
     def kdj(
         self,
         data: pd.DataFrame,
@@ -122,27 +52,8 @@ class FactorEngine:
         m1: int = 3,
         m2: int = 3
     ) -> Dict[str, pd.Series]:
-        """
-        计算KDJ指标
-        
-        Args:
-            data: 包含high, low, close的DataFrame
-            n: RSV周期
-            m1: K平滑周期
-            m2: D平滑周期
-            
-        Returns:
-            {'k': ..., 'd': ..., 'j': ...}
-        """
-        low_list = data['low'].rolling(window=n, min_periods=1).min()
-        high_list = data['high'].rolling(window=n, min_periods=1).max()
-        rsv = (data['close'] - low_list) / (high_list - low_list) * 100
-        
-        k = rsv.ewm(alpha=1/m1, adjust=False).mean()
-        d = k.ewm(alpha=1/m2, adjust=False).mean()
-        j = 3 * k - 2 * d
-        
-        return {'k': k, 'd': d, 'j': j}
+        """计算KDJ指标，返回 {'k', 'd', 'j'}"""
+        return indicators.kdj(data, n, m1, m2)
     
     def compute_all(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -267,12 +178,8 @@ class FactorEngine:
             df[f'volatility_{window}'] = df['close'].pct_change().rolling(window).std() * np.sqrt(252)
         
         # ATR (平均真实波幅)
-        high_low = df['high'] - df['low']
-        high_close = np.abs(df['high'] - df['close'].shift())
-        low_close = np.abs(df['low'] - df['close'].shift())
-        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         for window in [14, 20]:
-            df[f'atr{window}'] = tr.rolling(window).mean()
+            df[f'atr{window}'] = indicators.atr(df, window)
             df[f'atr_ratio_{window}'] = df[f'atr{window}'] / df['close']
         
         # ========== 量价类因子 ==========
@@ -359,16 +266,11 @@ class FactorEngine:
         
         # CCI - 商品通道指数
         for period in [20]:
-            tp = (df['high'] + df['low'] + df['close']) / 3
-            ma_tp = tp.rolling(window=period).mean()
-            md_tp = tp.rolling(window=period).apply(lambda x: np.abs(x - x.mean()).mean())
-            df[f'cci{period}'] = (tp - ma_tp) / (0.015 * md_tp)
-        
+            df[f'cci{period}'] = indicators.cci(df, period)
+
         # 威廉指标 %R
         for period in [14]:
-            highest_high = df['high'].rolling(window=period).max()
-            lowest_low = df['low'].rolling(window=period).min()
-            df[f'wr{period}'] = -100 * (highest_high - df['close']) / (highest_high - lowest_low)
+            df[f'wr{period}'] = indicators.williams_r(df, period)
         
         # 动量因子 MOM
         for period in [10, 20]:
@@ -402,23 +304,14 @@ class FactorEngine:
         
         # 资金流量指标 MFI
         for period in [14]:
-            typical_price = (df['high'] + df['low'] + df['close']) / 3
-            raw_money_flow = typical_price * df['volume']
-            money_flow = raw_money_flow.where(typical_price > typical_price.shift(), -raw_money_flow)
-            positive_flow = money_flow.where(money_flow > 0, 0).rolling(window=period).sum()
-            negative_flow = np.abs(money_flow.where(money_flow < 0, 0)).rolling(window=period).sum()
-            money_ratio = positive_flow / negative_flow
-            df[f'mfi{period}'] = 100 - (100 / (1 + money_ratio))
-        
+            df[f'mfi{period}'] = indicators.mfi(df, period)
+
         # 价量趋势 PVT
         close_change = df['close'].pct_change()
         df['pvt'] = (close_change * df['volume']).cumsum()
-        
+
         # 真实波幅 TR
-        tr1 = df['high'] - df['low']
-        tr2 = np.abs(df['high'] - df['close'].shift())
-        tr3 = np.abs(df['low'] - df['close'].shift())
-        df['tr'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        df['tr'] = indicators.true_range(df)
         
         # 成交额因子
         df['turnover'] = df['volume'] / df['volume'].rolling(20).mean()

@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 
 from .base import TechnicalFactor, FactorResult, FactorMetadata
+from quant_assistant.factors import indicators
 
 
 class MAFactor(TechnicalFactor):
@@ -26,9 +27,8 @@ class MAFactor(TechnicalFactor):
             raise ValueError(f"周期必须大于0: {self.period}")
     
     def calculate(self, df: pd.DataFrame) -> FactorResult:
-        prices = df[self.price_col]
-        ma = prices.rolling(window=self.period, min_periods=1).mean()
-        
+        ma = indicators.ma(df[self.price_col], self.period)
+
         return FactorResult(
             name=self.name,
             values=ma,
@@ -62,9 +62,8 @@ class EMAFactor(TechnicalFactor):
             raise ValueError(f"周期必须大于0: {self.period}")
     
     def calculate(self, df: pd.DataFrame) -> FactorResult:
-        prices = df[self.price_col]
-        ema = prices.ewm(span=self.period, adjust=False).mean()
-        
+        ema = indicators.ema(df[self.price_col], self.period)
+
         return FactorResult(
             name=self.name,
             values=ema,
@@ -108,10 +107,9 @@ class MACDFactor(TechnicalFactor):
     def calculate(self, df: pd.DataFrame) -> FactorResult:
         prices = df[self.price_col]
         
-        ema_fast = prices.ewm(span=self.fast, adjust=False).mean()
-        ema_slow = prices.ewm(span=self.slow, adjust=False).mean()
-        dif = ema_fast - ema_slow
-        dea = dif.ewm(span=self.signal, adjust=False).mean()
+        components = indicators.macd(prices, self.fast, self.slow, self.signal)
+        dif = components["macd"]
+        dea = components["signal"]
         macd = 2 * (dif - dea)
         
         return FactorResult(
@@ -152,23 +150,8 @@ class RSIFactor(TechnicalFactor):
             raise ValueError(f"周期必须大于0: {self.period}")
     
     def calculate(self, df: pd.DataFrame) -> FactorResult:
-        prices = df[self.price_col]
-        
-        # 计算价格变化
-        delta = prices.diff()
-        
-        # 分离涨跌
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        
-        # 计算平均涨跌
-        avg_gain = gain.rolling(window=self.period, min_periods=1).mean()
-        avg_loss = loss.rolling(window=self.period, min_periods=1).mean()
-        
-        # 计算RSI
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        
+        rsi = indicators.rsi(df[self.price_col], self.period)
+
         return FactorResult(
             name=self.name,
             values=rsi,
@@ -204,17 +187,10 @@ class BOLLFactor(TechnicalFactor):
     
     def calculate(self, df: pd.DataFrame) -> FactorResult:
         prices = df[self.price_col]
-        
-        # 中轨 (MA)
-        middle = prices.rolling(window=self.period, min_periods=1).mean()
-        
-        # 标准差
-        std = prices.rolling(window=self.period, min_periods=1).std()
-        
-        # 上轨和下轨
-        upper = middle + self.std_dev * std
-        lower = middle - self.std_dev * std
-        
+
+        boll = indicators.bollinger(prices, self.period, self.std_dev)
+        middle, upper, lower = boll["middle"], boll["upper"], boll["lower"]
+
         # 带宽 (%B)
         bandwidth = (prices - lower) / (upper - lower)
         
@@ -258,14 +234,9 @@ class KDJFactor(TechnicalFactor):
             raise ValueError("周期必须大于0")
     
     def calculate(self, df: pd.DataFrame) -> FactorResult:
-        low_list = df['low'].rolling(window=self.n, min_periods=1).min()
-        high_list = df['high'].rolling(window=self.n, min_periods=1).max()
-        rsv = (df['close'] - low_list) / (high_list - low_list) * 100
-        
-        k = rsv.ewm(com=self.m1 - 1, adjust=False).mean()
-        d = k.ewm(com=self.m2 - 1, adjust=False).mean()
-        j = 3 * k - 2 * d
-        
+        kdj = indicators.kdj(df, self.n, self.m1, self.m2)
+        k, d, j = kdj["k"], kdj["d"], kdj["j"]
+
         return FactorResult(
             name=self.name,
             values=j,
@@ -303,13 +274,8 @@ class ATRFactor(TechnicalFactor):
             raise ValueError(f"周期必须大于0: {self.period}")
     
     def calculate(self, df: pd.DataFrame) -> FactorResult:
-        high_low = df['high'] - df['low']
-        high_close = np.abs(df['high'] - df['close'].shift())
-        low_close = np.abs(df['low'] - df['close'].shift())
-        
-        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        atr = tr.rolling(window=self.period, min_periods=1).mean()
-        
+        atr = indicators.atr(df, self.period, min_periods=1)
+
         return FactorResult(
             name=self.name,
             values=atr,
