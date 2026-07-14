@@ -6,6 +6,8 @@ from typing import Callable, Iterable, Optional
 
 import pandas as pd
 
+from .cross_section import zscore as _zscore
+
 
 FilterFunction = Callable[[pd.DataFrame], pd.Series]
 
@@ -147,14 +149,6 @@ def default_strategy_candidates() -> dict[str, StrategyCandidate]:
 def _cross_sectional_score(data: pd.DataFrame, column: str) -> pd.Series:
     values = pd.to_numeric(data[column], errors="coerce")
     return values.groupby(data["trade_date"]).transform(_zscore)
-
-
-def _zscore(values: pd.Series) -> pd.Series:
-    mean = values.mean(skipna=True)
-    std = values.std(skipna=True)
-    if pd.isna(std) or std == 0:
-        return values.where(values.isna(), 0.0)
-    return (values - mean) / std
 
 
 def _positive(column: str) -> FilterFunction:
