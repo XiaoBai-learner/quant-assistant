@@ -69,6 +69,7 @@ class SelectionBacktester:
 
     def _run_next_open(self, prices: pd.DataFrame, holdings: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         price_data = self._prepare_price_data(prices)
+        price_lookup = self._prepare_price_lookup(price_data)
         dates = sorted(price_data["trade_date"].unique())
         targets_by_execution = self._targets_by_execution_date(holdings, dates)
         cash = float(self.initial_cash)
@@ -82,15 +83,15 @@ class SelectionBacktester:
             current_ts = pd.Timestamp(current_date)
             if current_ts in targets_by_execution:
                 target_weights = targets_by_execution[current_ts]
-                portfolio_value = self._portfolio_value(price_data, current_ts, cash, positions, price_field="open")
-                previous_weights = self._position_weights(price_data, current_ts, positions, portfolio_value)
+                portfolio_value = self._portfolio_value(price_lookup, current_ts, cash, positions, price_field="open")
+                previous_weights = self._position_weights(price_lookup, current_ts, positions, portfolio_value)
                 rebalance_rows.append({
                     "rebalance_date": current_ts,
                     "turnover": self._turnover(previous_weights, target_weights),
                     "cost_rate": 0.0,
                 })
                 cash, positions, ledger = self._execute_target_weights(
-                    price_data,
+                    price_lookup,
                     current_ts,
                     cash,
                     positions,
@@ -99,7 +100,7 @@ class SelectionBacktester:
                 )
                 ledger_rows.extend(ledger)
 
-            close_value = self._portfolio_value(price_data, current_ts, cash, positions, price_field="close")
+            close_value = self._portfolio_value(price_lookup, current_ts, cash, positions, price_field="close")
             daily_return = close_value / last_value - 1 if last_value else 0.0
             daily_rows.append({
                 "trade_date": current_ts,
@@ -125,33 +126,41 @@ class SelectionBacktester:
     ) -> tuple[float, Dict[str, int], list[dict]]:
         ledger = []
         symbols = sorted(set(positions) | set(target_weights))
-        current_values = {
-            symbol: positions.get(symbol, 0) * self._price_row(price_data, trade_date, symbol).get("open", 0.0)
+        price_rows = {
+            symbol: self._lookup_price_row(price_data, trade_date, symbol)
             for symbol in symbols
-            if self._has_price_row(price_data, trade_date, symbol)
         }
+        current_values = {}
+        for symbol, row in price_rows.items():
+            if not row.empty:
+                current_values[symbol] = positions.get(symbol, 0) * row.get("open", 0.0)
 
+        trade_plan = []
         for symbol in symbols:
-            row = self._price_row(price_data, trade_date, symbol)
             target_value = portfolio_value * target_weights.get(symbol, 0.0)
             current_value = current_values.get(symbol, 0.0)
             delta_value = target_value - current_value
             if abs(delta_value) < 1e-9:
                 continue
             action = "buy" if delta_value > 0 else "sell"
+            trade_plan.append((0 if action == "sell" else 1, symbol, action, delta_value))
+
+        for _, symbol, action, delta_value in sorted(trade_plan):
+            row = price_rows.get(symbol, pd.Series(dtype=float))
+            target_weight = target_weights.get(symbol, 0.0)
             if row.empty or not self._is_tradable(row):
-                ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, None, 0.0, "skipped", "non_tradable_high_equals_low"))
+                ledger.append(self._ledger_row(trade_date, symbol, action, target_weight, 0, None, 0.0, "skipped", "non_tradable_high_equals_low"))
                 continue
             price = float(row["open"])
             if price <= 0 or pd.isna(price):
-                ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, None, 0.0, "skipped", "missing_execution_price"))
+                ledger.append(self._ledger_row(trade_date, symbol, action, target_weight, 0, None, 0.0, "skipped", "missing_execution_price"))
                 continue
             if action == "buy":
                 available_cash = max(cash, 0.0)
                 gross_budget = min(delta_value, available_cash)
                 shares = int(gross_budget / (price * (1 + self.commission_rate + self.slippage)))
                 if shares <= 0:
-                    ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, price, 0.0, "skipped", "insufficient_cash"))
+                    ledger.append(self._ledger_row(trade_date, symbol, action, target_weight, 0, price, 0.0, "skipped", "insufficient_cash"))
                     continue
                 trade_value = shares * price
                 cost = trade_value * (self.commission_rate + self.slippage)
@@ -159,10 +168,10 @@ class SelectionBacktester:
                 positions[symbol] = positions.get(symbol, 0) + shares
             else:
                 shares = min(positions.get(symbol, 0), int(abs(delta_value) / price))
-                if target_weights.get(symbol, 0.0) == 0:
+                if target_weight == 0:
                     shares = positions.get(symbol, 0)
                 if shares <= 0:
-                    ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), 0, price, 0.0, "skipped", "no_position"))
+                    ledger.append(self._ledger_row(trade_date, symbol, action, target_weight, 0, price, 0.0, "skipped", "no_position"))
                     continue
                 trade_value = shares * price
                 cost = trade_value * (self.commission_rate + self.slippage)
@@ -170,7 +179,7 @@ class SelectionBacktester:
                 positions[symbol] = positions.get(symbol, 0) - shares
                 if positions[symbol] <= 0:
                     positions.pop(symbol, None)
-            ledger.append(self._ledger_row(trade_date, symbol, action, target_weights.get(symbol, 0.0), shares, price, cost, "filled", ""))
+            ledger.append(self._ledger_row(trade_date, symbol, action, target_weight, shares, price, cost, "filled", ""))
         return cash, positions, ledger
 
     @staticmethod
@@ -189,6 +198,10 @@ class SelectionBacktester:
             if column in data.columns:
                 data[column] = pd.to_numeric(data[column], errors="coerce")
         return data.sort_values(["trade_date", "symbol"]).reset_index(drop=True)
+
+    @staticmethod
+    def _prepare_price_lookup(price_data: pd.DataFrame) -> pd.DataFrame:
+        return price_data.set_index(["trade_date", "symbol"], drop=False).sort_index()
 
     @staticmethod
     def _targets_by_execution_date(holdings: pd.DataFrame, dates: list[pd.Timestamp]) -> Dict[pd.Timestamp, Dict[str, float]]:
@@ -215,6 +228,16 @@ class SelectionBacktester:
         return rows.iloc[0]
 
     @staticmethod
+    def _lookup_price_row(price_lookup: pd.DataFrame, trade_date: pd.Timestamp, symbol: str) -> pd.Series:
+        try:
+            row = price_lookup.loc[(pd.Timestamp(trade_date), symbol)]
+        except KeyError:
+            return pd.Series(dtype=float)
+        if isinstance(row, pd.DataFrame):
+            return row.iloc[0]
+        return row
+
+    @staticmethod
     def _is_tradable(row: pd.Series) -> bool:
         if row.empty:
             return False
@@ -236,7 +259,7 @@ class SelectionBacktester:
     ) -> float:
         value = cash
         for symbol, shares in positions.items():
-            row = self._price_row(price_data, trade_date, symbol)
+            row = self._lookup_price_row(price_data, trade_date, symbol)
             if row.empty or pd.isna(row.get(price_field)):
                 continue
             value += shares * float(row[price_field])
@@ -253,7 +276,7 @@ class SelectionBacktester:
             return {}
         weights = {}
         for symbol, shares in positions.items():
-            row = self._price_row(price_data, trade_date, symbol)
+            row = self._lookup_price_row(price_data, trade_date, symbol)
             if row.empty or pd.isna(row.get("open")):
                 continue
             weights[symbol] = shares * float(row["open"]) / portfolio_value

@@ -12,6 +12,42 @@
 
 ## Task List
 
+### Task 0: Intraday Confirmation Layer Backlog
+
+**Status:** Backlog, after daily strategy search and stable execution validation.
+
+**Files:**
+- Plan: `quant_assistant/research/intraday_confirmation.py`
+- Plan: `scripts/confirm_selected_stocks_intraday.py`
+- Plan: `tests/test_intraday_confirmation.py`
+
+- [ ] For stocks selected by daily strategies, fetch recent 3-day and 5-day minute K lines.
+- [ ] Cache minute bars separately under `~/.quant_assistant/cache/ashare_minute/{period}/{symbol}.parquet`.
+- [ ] Compute secondary confirmation features: intraday volume surge, VWAP position, last-hour strength, volatility expansion, price-volume divergence, and high-low equality tradability flags.
+- [ ] Use only minute data available up to the selection-date close to avoid look-ahead.
+- [ ] Output a confirmation report that supports, weakens, or rejects the daily candidate without changing the daily backtest contract.
+- [ ] Keep this as a post-selection confirmation layer, not a standalone intraday trading strategy.
+
+### Task 0.5: High-Return Strategy Combination Search
+
+**Status:** Current priority.
+
+**Goal:** Use the two-year daily A-share feature wide table to search for strategy combinations that target total return above 100% and maximum drawdown below 20%, with executable next-day open buy/sell prices and detailed trade ledgers.
+
+**Constraints:**
+- No STAR Market stocks.
+- No execution when `high == low`, missing prices, zero volume, or low-coverage market dates.
+- Buy/sell prices must be available at the next trading day's open with commission and slippage included.
+- Results must include daily holdings, trade ledger, equity curve, total return, annual return, volatility, Sharpe, max drawdown, win rate, and skipped-trade reasons.
+- A candidate strategy is not acceptable if the result only works through data-quality artifacts, future leakage, or a single overfit stock.
+
+**Search directions:**
+- [ ] Build momentum, reversal, liquidity, breakout, pullback, and defensive factor formulas from current daily columns.
+- [ ] Search top-N holdings, rebalance interval, max weight, volatility filters, liquidity filters, drawdown filters, and stop/cash rules.
+- [ ] Combine multiple daily strategies with portfolio-level risk gates.
+- [ ] Compare in-sample and recent-period performance to flag unstable or overfit combinations.
+- [ ] Promote only strategies that satisfy the return/drawdown target and have reasonable trade ledgers.
+
 ### Task 1: Provider Stability Baseline
 
 **Files:**

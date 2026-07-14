@@ -77,3 +77,49 @@ def test_selection_backtester_sells_removed_holdings_at_next_open():
     sells = result["trade_ledger"][result["trade_ledger"]["action"] == "sell"]
     assert sells.iloc[0]["trade_date"] == pd.Timestamp("2024-01-04")
     assert sells.iloc[0]["price"] == 13.0
+
+
+def test_next_open_backtest_uses_indexed_price_lookup_instead_of_full_frame_scan():
+    class NoFrameScanBacktester(SelectionBacktester):
+        @staticmethod
+        def _price_row(price_data, trade_date, symbol):
+            raise AssertionError("next_open backtest should use indexed price lookup")
+
+    holdings = pd.DataFrame({
+        "rebalance_date": pd.to_datetime(["2024-01-01"]),
+        "symbol": ["A"],
+        "target_weight": [1.0],
+    })
+
+    result = NoFrameScanBacktester(initial_cash=11000, commission_rate=0.0, slippage=0.0).run(
+        make_prices(),
+        holdings,
+        execution="next_open",
+    )
+
+    buy = result["trade_ledger"][result["trade_ledger"]["action"] == "buy"].iloc[0]
+    assert buy["trade_date"] == pd.Timestamp("2024-01-02")
+    assert buy["price"] == 11.0
+
+
+def test_selection_backtester_sells_before_buys_during_rebalance():
+    prices = make_prices()
+    prices.loc[
+        (prices["symbol"] == "B") & (prices["trade_date"] == pd.Timestamp("2024-01-02")),
+        ["high", "low"],
+    ] = [21.5, 20.8]
+    holdings = pd.DataFrame({
+        "rebalance_date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+        "symbol": ["B", "A"],
+        "target_weight": [1.0, 1.0],
+    })
+
+    result = SelectionBacktester(initial_cash=21000, commission_rate=0.0, slippage=0.0).run(
+        prices,
+        holdings,
+        execution="next_open",
+    )
+
+    day3_ledger = result["trade_ledger"][result["trade_ledger"]["trade_date"] == pd.Timestamp("2024-01-03")]
+    assert list(day3_ledger["action"]) == ["sell", "buy"]
+    assert day3_ledger[day3_ledger["symbol"] == "A"].iloc[0]["shares"] > 1000
