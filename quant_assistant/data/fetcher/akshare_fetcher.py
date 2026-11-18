@@ -88,7 +88,8 @@ class AKShareFetcher(BaseDataFetcher):
         self,
         symbol: str,
         start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        end_date: Optional[str] = None,
+        adjust: str = "qfq",
     ) -> pd.DataFrame:
         """获取日线行情数据"""
         try:
@@ -104,12 +105,13 @@ class AKShareFetcher(BaseDataFetcher):
             
             logger.info(f"获取 {symbol} 日线数据: {start_date} ~ {end_date}")
             
-            df = ak.stock_zh_a_hist(
+            history = getattr(ak, "stock_zh_a_hist", None) or ak.stock_zh_a_hist_em
+            df = history(
                 symbol=symbol,
                 period="daily",
                 start_date=start,
                 end_date=end,
-                adjust="qfq"
+                adjust="" if adjust == "none" else adjust,
             )
             
             if df.empty:

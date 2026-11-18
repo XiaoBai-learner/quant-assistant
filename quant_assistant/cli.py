@@ -150,6 +150,9 @@ def main():
     except Exception as e:
         logger.error(f"命令执行失败: {e}")
         raise
+    finally:
+        if api._data_api is not None:
+            api._data_api.close()
 
 
 def handle_data_command(api: QuantAPI, args):
@@ -163,6 +166,8 @@ def handle_data_command(api: QuantAPI, args):
             period=args.period
         )
         print(f"\n获取到 {len(data)} 条数据:")
+        if data.attrs.get("source"):
+            print(f"数据源: {data.attrs['source']} / {data.attrs.get('mode', 'default')}")
         print(data.tail(10))
         
         if args.save:

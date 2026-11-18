@@ -10,7 +10,7 @@ from datetime import datetime, date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from quant_assistant.data.fetcher.akshare_fetcher import AKShareFetcher
+from quant_assistant.data.fetcher import UnifiedDataFetcher
 from quant_assistant.data.storage.mysql_storage import MySQLStorage
 from quant_assistant.data.query.data_query import DataQueryEngine
 from quant_assistant.data.database.connection import db_manager
@@ -37,7 +37,7 @@ def update_stock_list():
     """更新股票列表"""
     print("更新股票列表...")
     
-    fetcher = AKShareFetcher()
+    fetcher = UnifiedDataFetcher()
     storage = MySQLStorage()
     
     df = fetcher.get_stock_list()
@@ -48,7 +48,7 @@ def update_stock_list():
 
 def update_daily_data(symbol: str = None, start_date: str = None, end_date: str = None):
     """更新日线数据"""
-    fetcher = AKShareFetcher()
+    fetcher = UnifiedDataFetcher()
     storage = MySQLStorage()
     
     if end_date is None:

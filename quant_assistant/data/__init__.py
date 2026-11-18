@@ -6,9 +6,9 @@
 支持多种数据源:
     - AKShare: 免费开源数据，适合历史数据
     - EFinance: 细粒度实时数据，支持分钟级、分笔级
-    - TickFlow: 稳定行情数据服务，支持免费/付费版
-      * 免费版: 日K线、财务数据、标的信息（无需API Key）
-      * 付费版: 分钟级K线、实时行情（需要API Key）
+    - TickFlow: 稳定行情数据服务，支持匿名免费与 Key 认证端点
+      * 匿名免费服务: 历史日K线、标的信息（无需API Key）
+      * Key 认证服务: 按账户实际权限提供日线、实时行情、分钟线或财务数据
     
 推荐使用 UnifiedDataFetcher（统一数据获取器）:
     - 整合 AKShare、EFinance、TickFlow 多个数据源
@@ -20,7 +20,7 @@
     >>> from quant_assistant.data import UnifiedDataFetcher, DataSourceType
     >>> 
     >>> # 使用统一数据获取器（推荐）
-    >>> fetcher = UnifiedDataFetcher()  # 默认 AKShare 为主
+    >>> fetcher = UnifiedDataFetcher()  # 默认 TickFlow 为主
     >>> df = fetcher.get_daily_quotes('600000', start_date='2024-01-01')
     >>> 
     >>> # 指定 TickFlow 为主数据源
@@ -36,7 +36,7 @@
     >>> tickflow = TickFlowFetcher()  # 免费版，无需API Key
     >>> daily = tickflow.get_daily_quotes('600000.SH', start_date='2024-01-01')
     >>> 
-    >>> # 使用 TickFlow 付费版获取分钟数据
+    >>> # 使用具有分钟权限的 TickFlow Key
     >>> tickflow_paid = TickFlowFetcher(api_key='your-key', use_paid=True)
     >>> minute = tickflow_paid.get_minute_quotes('600000.SH', period='5m')
 """

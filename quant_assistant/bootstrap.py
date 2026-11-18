@@ -14,7 +14,7 @@ from quant_assistant.backtest.broker import Broker
 from quant_assistant.backtest.portfolio import Portfolio
 from quant_assistant.backtest.performance import PerformanceAnalyzer
 from quant_assistant.backtest.engine import BacktestConfig
-from quant_assistant.data.fetcher.akshare_fetcher import AKShareFetcher
+from quant_assistant.data.fetcher import UnifiedDataFetcher
 from quant_assistant.data.storage.mysql_storage import MySQLStorage
 from quant_assistant.data.validator import DataValidator
 from quant_assistant.risk.manager import RiskManager
@@ -36,7 +36,7 @@ def register_services():
     container.set_config('data_config', config.data)
     
     # 2. 注册数据层服务
-    register_type(IDataFetcher, AKShareFetcher)
+    register_type(IDataFetcher, UnifiedDataFetcher)
     register_type(IDataStorage, MySQLStorage)
     register_type(IDataValidator, DataValidator)
     
@@ -83,7 +83,7 @@ def create_backtest_engine(config: BacktestConfig) -> 'BacktestEngine':
     return engine
 
 
-def create_data_fetcher() -> 'AKShareFetcher':
+def create_data_fetcher() -> 'UnifiedDataFetcher':
     """创建数据获取器"""
     container = get_container()
     return container.resolve(IDataFetcher)

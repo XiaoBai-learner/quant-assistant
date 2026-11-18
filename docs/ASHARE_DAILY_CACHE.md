@@ -16,8 +16,8 @@
 
 脚本把“股票列表”和“日线行情”拆成两条数据链路：
 
-- 股票列表：默认 `--stock-list-source tickflow`。当前本机试跑中，TickFlow 能稳定返回全 A 列表，可避免 `auto` 模式先尝试 EFinance/AKShare 产生前置报错日志。
-- 日线行情：默认 `--source auto`，继续使用统一数据获取器做行情源故障切换。
+- 股票列表：默认 `--stock-list-source tickflow`。直接使用主数据源获取沪深北 A 股列表。
+- 日线行情：默认 `--source auto`，按 TickFlow → EFinance → AKShare 做故障切换；`--no-fallback` 可禁止切换以严格测试所选数据源。
 
 也可以显式指定：
 

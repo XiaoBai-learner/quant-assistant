@@ -1,192 +1,128 @@
-# TickFlow 数据源使用指南
+# TickFlow 主数据源接入与测试
 
-本文档介绍如何在 Quant Assistant 中使用 TickFlow 数据源。
+更新时间：2026-11-18。官方参考：[Python 快速开始](https://docs.tickflow.org/zh-Hans/sdk/python-quickstart)。
 
-## 概述
+## 设计与入口
 
-TickFlow 是一个稳定、易用的行情数据服务，提供实时行情和历史 K 线数据。
+取数链路统一为：
 
-- **免费版**: https://free-api.tickflow.org (无需 API Key)
-- **付费版**: https://api.tickflow.org (需要 API Key)
-
-## 免费版 vs 付费版
-
-| 功能 | 免费版 | 付费版 |
-|------|--------|--------|
-| 日K线数据 (1d, 1w, 1M, 1Q, 1Y) | ✅ | ✅ |
-| 标的信息查询 | ✅ | ✅ |
-| 财务数据 (资产负债表/利润表/现金流量表) | ✅ | ✅ |
-| 核心财务指标 | ✅ | ✅ |
-| 交易所列表 | ✅ | ✅ |
-| 分钟级K线 (1m, 5m, 15m, 30m, 60m) | ❌ | ✅ |
-| 实时行情 | ❌ | ✅ |
-| 更高频率访问 | ❌ | ✅ |
-
-## 快速开始
-
-### 安装依赖
-
-TickFlow 数据获取器使用标准库 `requests`，无需额外安装依赖。
-
-### 基本使用
-
-```python
-from quant_assistant.data import TickFlowFetcher
-
-# 创建免费版获取器
-fetcher = TickFlowFetcher()
-
-# 检查服务可用性
-if fetcher.is_available():
-    print("TickFlow 服务可用")
+```text
+QuantAPI.data / DataHub.market / quant CLI / 日线缓存任务
+    → UnifiedDataFetcher
+    → TickFlow 官方 SDK → EFinance → AKShare
 ```
 
-## API 参考
+TickFlow 是默认主源，`auto` 也使用相同优先级。因子、研究、回测仍接收原有 pandas DataFrame，不需要重写。
 
-### 获取交易所列表
+- `TickFlowFetcher` 只负责 TickFlow 的端点、参数、权限和标准化。
+- `UnifiedDataFetcher` 负责统一主备策略，失败或空结果时切换；所有接口遵守 `fallback_enabled`。
+- `DataHub.market.daily()`、默认 `DataHub.market.realtime()` 共用这套取数策略。
+- 估值快照 `DataHub.market.valuation()` 仍使用腾讯；资金流、行业、事件仍使用已有东方财富 provider；财务面板仍保留现有渠道。当前 TickFlow Key 没有财务权限，不假装所有扩展数据已经迁移。
+- 显式注入的 fetcher、腾讯 provider 继续按调用者选择运行。
 
-```python
-exchanges = fetcher.get_exchanges()
-print(exchanges)
-# 输出: DataFrame 包含 exchange, region, count 列
+## 配置
+
+在项目根目录 `.env` 中配置（该文件被 Git 忽略）：
+
+```dotenv
+TICKFLOW_API_KEY=your-key
+TICKFLOW_MODE=authenticated
 ```
 
-### 获取股票列表
+环境变量优先于本地文件；不会覆盖已有 shell 配置。
+
+| mode | 端点 | 含义 |
+|---|---|---|
+| `free` | `https://free-api.tickflow.org` | 匿名免费历史服务；不发送 Key |
+| `authenticated` | `https://api.tickflow.org` | 使用 Key，权限由账户决定，不等于已付费 |
+
+不指定模式时，有 Key 自动选择认证服务，否则选择匿名免费服务。旧构造参数 `use_paid=True/False` 保留兼容；新代码使用 `mode`。
+
+API Key 仅用于官方认证端点，不写入源码、报告或日志。默认 15 秒超时，SDK 对连接、限流和服务端临时错误最多重试 2 次，401/403 不重试。适配器串行调用间隔默认至少 1.1 秒；该间隔是保守客户端设置，不是账户配额承诺。
+
+## 使用
 
 ```python
-# 获取全部A股
-stocks = fetcher.get_stock_list()
+from quant_assistant import QuantAPI
+from quant_assistant.data import UnifiedDataFetcher, TickFlowFetcher, DataHub
 
-# 获取指定交易所
-sh_stocks = fetcher.get_stock_list('SH')  # 上交所
-sz_stocks = fetcher.get_stock_list('SZ')  # 深交所
-bj_stocks = fetcher.get_stock_list('BJ')  # 北交所
-```
+api = QuantAPI()
+bars = api.data.get_stock_data("600000.SH", start="2026-10-01", end="2026-11-17")
+print(bars.tail())
+print(bars.attrs)  # source、mode、复权、单位及主备尝试
 
-### 获取日线数据
+# 严格测试 TickFlow，禁止使用其他渠道掩盖失败
+fetcher = UnifiedDataFetcher(primary_source="tickflow", fallback_enabled=False)
+bars = fetcher.get_daily_quotes("000001.SZ", "2026-10-01", "2026-11-17")
+quotes = fetcher.get_realtime_quotes(["600000.SH"])
+print(fetcher.last_source, fetcher.last_attempts)
+fetcher.close()
 
-```python
-# 获取日线数据
-df = fetcher.get_daily_quotes(
-    '600000',  # 股票代码
-    start_date='2024-01-01',
-    end_date='2024-12-31'
-)
-
-# 返回 DataFrame 包含:
-# - trade_date: 交易日期
-# - open: 开盘价
-# - high: 最高价
-# - low: 最低价
-# - close: 收盘价
-# - volume: 成交量
-# - amount: 成交额
-# - symbol: 股票代码
-```
-
-### 获取财务数据
-
-```python
-# 获取财务指标
-metrics = fetcher.get_financial_indicators('600000.SH')
-
-# 获取利润表
-income = fetcher.get_income_statement('600000.SH')
-
-# 获取资产负债表
-balance = fetcher.get_balance_sheet('600000.SH')
-
-# 获取现金流量表
-cashflow = fetcher.get_cash_flow('600000.SH')
-```
-
-### 获取标的信息
-
-```python
-info = fetcher.get_instrument_info('600000.SH')
-print(info)
-# 输出: 包含 symbol, name, exchange, type, listing_date 等
-```
-
-## 付费版功能
-
-### 初始化付费版
-
-```python
-from quant_assistant.data import TickFlowFetcher
-
-# 使用 API Key 初始化付费版
-fetcher = TickFlowFetcher(
-    api_key='your-api-key',
-    use_paid=True
-)
-```
-
-### 获取分钟级数据
-
-```python
-# 获取5分钟K线
-df = fetcher.get_minute_quotes(
-    '600000.SH',
-    period='5m',  # 支持 '1m', '5m', '15m', '30m', '60m'
-    start_date='2024-01-01',
-    end_date='2024-01-31'
-)
-```
-
-### 获取实时行情
-
-```python
-# 获取实时行情
-quotes = fetcher.get_realtime_quotes(['600000.SH', '000001.SZ'])
-```
-
-## 完整示例
-
-```python
-from quant_assistant.data import TickFlowFetcher
-import pandas as pd
-
-# 创建获取器
-fetcher = TickFlowFetcher()
-
-# 获取浦发银行数据
-df = fetcher.get_daily_quotes('600000.SH', start_date='2024-01-01')
-
-# 计算简单指标
-latest = df.iloc[-1]
-print(f"最新价格: {latest['close']}")
-print(f"涨跌幅: {(latest['close'] - df.iloc[-2]['close']) / df.iloc[-2]['close'] * 100:.2f}%")
-
-# 获取财务数据
-financials = fetcher.get_financial_indicators('600000.SH')
-if not financials.empty:
-    print(f"最新财务指标: {financials.iloc[0].to_dict()}")
-```
-
-## 错误处理
-
-```python
-from quant_assistant.core.exceptions import DataFetchException
-
+# 显式体验匿名服务；即使本地有 Key，也不会发送
+free = TickFlowFetcher(mode="free")
 try:
-    df = fetcher.get_daily_quotes('600000.SH')
-except DataFetchException as e:
-    print(f"数据获取失败: {e}")
+    bars = free.get_daily_quotes("600000.SH", "2026-10-01", "2026-11-17")
+finally:
+    free.close()
+
+hub = DataHub()
+bars = hub.market.daily("600000.SH", start="2026-10-01", end="2026-11-17")
 ```
 
-## 注意事项
+### 日线口径
 
-1. **免费版限制**: 免费版不提供分钟级数据和实时行情
-2. **速率限制**: 请合理控制请求频率，避免触发限流
-3. **数据格式**: 股票代码格式支持 `600000` 或 `600000.SH`
-4. **日期格式**: 支持 `YYYY-MM-DD` 格式
+- 输入支持六位代码、`600000.SH`、`sh600000`；保留显式交易所，避免将 `000001.SH` 指数误识别为深圳股票。
+- 股票列表只保留沪深北 A 股，不把 ETF、指数或 B 股混入股票池。
+- 输出：`symbol` 为六位代码，`trade_date` 为上海时区对应交易日的无时区 Timestamp，附带 OHLCV 与 `amount`。
+- 日期转换成 API 所需的 `start_time` / `end_time` 毫秒时间戳，结束日包含全天；返回后再次裁剪、排序、去重。
+- 每页最多 10000 根；历史超过上限会向前分页，若服务端不推进分页则明确报错，拒绝静默截断。
+- `qfq` → `forward_additive`，`hfq` → `backward_additive`，保持与原东方财富渠道的差值复权口径一致。
+- 比例复权可直接在 `TickFlowFetcher` 传 `forward` / `backward`，不会默认为另一种复权。
+- `volume` 保留 A 股源数据的“手”，`amount` 为人民币元。使用复权价格时，不应期望 `close × volume × 100` 严格等于原始成交额。
+- 日线 `symbol` 兼容旧研究模块使用六位代码；实时行情保留 `代码.交易所`，以区分 `000001.SH` 指数与 `000001.SZ` 股票。实时批量结果若缺少请求标的则报错，不把部分返回标为整批成功。
+- 来源、模式、复权等保存在 `DataFrame.attrs`；缓存任务的 JSON 报告逐股票记录实际来源与主备尝试。后续 DataFrame 操作不一定保留 attrs，审计时应保留报告。
 
-## 获取 API Key
+## 可重复诊断
 
-如需使用付费版功能，请访问 [tickflow.org](https://tickflow.org) 注册并获取 API Key。
+安装依赖后，从项目根目录运行：
 
-## 文档
+```bash
+python scripts/diagnose_tickflow.py --mode both
+```
 
-- TickFlow 官方文档: https://docs.tickflow.org/zh-Hans
-- OpenAPI 规范: https://free-api.tickflow.org/openapi.json
+只用匿名服务：
+
+```bash
+python scripts/diagnose_tickflow.py --mode free
+```
+
+脚本直接调用 TickFlow，不启用备用渠道，检查股票列表、沪深北样本日线、三种复权、标的信息、实时快照、分钟线及财务权限。报告默认写入 `reports/tickflow_diagnostics.json`，包含耗时、行数、最新日期、字段和错误状态。权限拒绝与空数据分别记录。
+
+小范围写入独立缓存，避免与旧行情混合：
+
+```bash
+python scripts/cache_ashare_daily.py \
+  --update-range --start 2026-10-01 --end 2026-11-17 \
+  --symbols 600000.SH,000001.SZ,920662.BJ \
+  --source tickflow --no-fallback \
+  --cache-dir reports/tickflow_sample_cache \
+  --report reports/tickflow_sample_cache_report.json
+```
+
+## 2026-11-18 账户实测
+
+| 检查 | 匿名免费服务 | 本地 Key 认证服务 |
+|---|---|---|
+| 沪深北 A 股列表 | 成功，5892 只 | 成功，5892 只 |
+| 沪深北三只样本日线 | 成功，最新 2026-11-17 | 成功，最新 2026-11-18 |
+| 差值前复权、后复权、不复权 | 成功 | 成功 |
+| 标的信息 | 成功 | 成功 |
+| 实时快照 | 免费模式不支持 | 成功 |
+| 5 分钟 K 线 | 免费模式不支持 | HTTP 403：无分钟 K 线查询权限 |
+| 核心财务指标 | 免费模式不支持 | HTTP 403：无公司财务数据查询权限 |
+
+这是该 Key 在本次测试时的能力，不是所有免费账户的统一承诺。仅以日线用于当前研究已经可行；分钟级策略和 TickFlow 财务数据目前不可用。历史长度、大规模稳定性与限流阈值应分开测试，不能从几次成功请求推断。认证日线可能包含尚未完成的当日 K 线，历史研究建议显式指定已收盘的结束日。
+
+已额外跑通 2025-01-02 至 2026-11-17 共 453 条浦发银行日线 → MA20 → 原事件回测，及三只股票共 87 条独立 Parquet 缓存。结果见 `reports/tickflow_pipeline_smoke.json`、`reports/tickflow_sample_cache_report.json`。该回测用于验证接口兼容性，不用于评价策略收益。
+
+回归验证：`python -m pytest -q`，209 项通过（保留项目已有的弃用与性能警告）。

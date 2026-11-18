@@ -33,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="股票列表数据源，默认 tickflow 以减少列表获取阶段的无效重试",
     )
     parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", "none"], help="复权方式")
+    parser.add_argument("--no-fallback", action="store_true", help="严格测试所选数据源，禁止切换备用源")
     parser.add_argument("--start", default=None, help="范围更新开始日期 YYYY-MM-DD")
     parser.add_argument("--end", default=None, help="初始化截止日期 YYYY-MM-DD")
     parser.add_argument("--run-date", default=None, help="增量运行日期 YYYY-MM-DD，用于计算上一交易日")
@@ -43,9 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_data_api(source: str):
+def create_data_api(source: str, fallback_enabled: bool = True):
     api = QuantAPI()
-    fetcher = UnifiedDataFetcher(primary_source=source)
+    fetcher = UnifiedDataFetcher(primary_source=source, fallback_enabled=fallback_enabled)
     api.data.set_fetcher(fetcher)
     return api.data
 
@@ -76,55 +77,60 @@ def run(args: argparse.Namespace) -> dict:
         }
     else:
         updater = AshareCacheUpdater(
-            data_api=create_data_api(args.source),
-            stock_list_api=create_data_api(args.stock_list_source),
+            data_api=create_data_api(args.source, fallback_enabled=not args.no_fallback),
+            stock_list_api=create_data_api(args.stock_list_source, fallback_enabled=not args.no_fallback),
             cache=cache,
         )
-        if args.init_one_year:
-            report = updater.initialize_one_year(
-                end=args.end,
-                market=args.market,
-                adjust=args.adjust,
-                limit=args.limit,
-                symbols=symbols,
-            )
-            report["mode"] = "init_one_year"
-        elif args.init_years is not None:
-            report = updater.initialize_years(
-                end=args.end,
-                years=args.init_years,
-                market=args.market,
-                adjust=args.adjust,
-                limit=args.limit,
-                symbols=symbols,
-            )
-            report["mode"] = "init_years"
-            report["years"] = args.init_years
-        elif args.update_range:
-            if not args.start or not args.end:
-                raise ValueError("--update-range 需要同时提供 --start 和 --end")
-            report = updater.update_range(
-                start=args.start,
-                end=args.end,
-                market=args.market,
-                adjust=args.adjust,
-                limit=args.limit,
-                symbols=symbols,
-            )
-            report["mode"] = "update_range"
-        else:
-            report = updater.update_latest(
-                run_date=args.run_date,
-                market=args.market,
-                adjust=args.adjust,
-                limit=args.limit,
-                symbols=symbols,
-            )
-            report["mode"] = "update_latest"
+        try:
+            if args.init_one_year:
+                report = updater.initialize_one_year(
+                    end=args.end,
+                    market=args.market,
+                    adjust=args.adjust,
+                    limit=args.limit,
+                    symbols=symbols,
+                )
+                report["mode"] = "init_one_year"
+            elif args.init_years is not None:
+                report = updater.initialize_years(
+                    end=args.end,
+                    years=args.init_years,
+                    market=args.market,
+                    adjust=args.adjust,
+                    limit=args.limit,
+                    symbols=symbols,
+                )
+                report["mode"] = "init_years"
+                report["years"] = args.init_years
+            elif args.update_range:
+                if not args.start or not args.end:
+                    raise ValueError("--update-range 需要同时提供 --start 和 --end")
+                report = updater.update_range(
+                    start=args.start,
+                    end=args.end,
+                    market=args.market,
+                    adjust=args.adjust,
+                    limit=args.limit,
+                    symbols=symbols,
+                )
+                report["mode"] = "update_range"
+            else:
+                report = updater.update_latest(
+                    run_date=args.run_date,
+                    market=args.market,
+                    adjust=args.adjust,
+                    limit=args.limit,
+                    symbols=symbols,
+                )
+                report["mode"] = "update_latest"
+        finally:
+            updater.data_api.close()
+            updater.stock_list_api.close()
         report["source"] = args.source
         report["stock_list_source"] = args.stock_list_source
         report["requested_symbols"] = symbols
 
+    report["fallback_enabled"] = not args.no_fallback
     output = Path(args.report)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")

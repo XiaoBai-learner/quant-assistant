@@ -1,13 +1,13 @@
 """
 统一数据获取器
 
-将 AKShare 和 TickFlow 数据源统一封装，对外提供一致的接口。
+将 TickFlow、EFinance 和 AKShare 数据源统一封装，对外提供一致的接口。
 支持配置化数据源选择和故障自动切换。
 
 使用示例:
     >>> from quant_assistant.data import UnifiedDataFetcher
     >>> 
-    >>> # 默认使用 AKShare 为主，TickFlow 为备用
+    >>> # 默认使用 TickFlow 为主，EFinance / AKShare 为备用
     >>> fetcher = UnifiedDataFetcher()
     >>> 
     >>> # 指定优先使用 TickFlow
@@ -43,7 +43,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
     """
     统一数据获取器
     
-    整合 AKShare 和 TickFlow 两个数据源，提供统一的对外接口。
+    整合 TickFlow、EFinance 和 AKShare 数据源，提供统一的对外接口。
     支持配置化选择主要数据源，并在主数据源故障时自动切换到备用数据源。
     
     特性:
@@ -59,7 +59,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
         tickflow_fetcher: TickFlow 数据获取器实例
     
     示例:
-        >>> # 基本使用 - 默认 AKShare 为主
+        >>> # 基本使用 - 默认 TickFlow 为主
         >>> fetcher = UnifiedDataFetcher()
         >>> stocks = fetcher.get_stock_list()
         >>> 
@@ -72,19 +72,19 @@ class UnifiedDataFetcher(BaseDataFetcher):
     
     def __init__(
         self,
-        primary_source: Union[str, DataSourceType] = DataSourceType.AKSHARE,
+        primary_source: Union[str, DataSourceType] = DataSourceType.TICKFLOW,
         fallback_enabled: bool = True,
         tickflow_api_key: Optional[str] = None,
-        tickflow_use_paid: bool = False
+        tickflow_use_paid: Optional[bool] = None
     ):
         """
         初始化统一数据获取器
         
         Args:
-            primary_source: 主要数据源，可选 'akshare', 'tickflow', 'auto'，默认为 'akshare'
+            primary_source: 主数据源，默认 TickFlow；auto 也按 TickFlow、EFinance、AKShare 排序
             fallback_enabled: 是否启用故障自动切换，默认为 True
-            tickflow_api_key: TickFlow API Key（付费版需要）
-            tickflow_use_paid: 是否使用 TickFlow 付费版
+            tickflow_api_key: TickFlow API Key，默认从本地环境读取
+            tickflow_use_paid: 兼容旧参数；None 按 TICKFLOW_MODE 和 Key 自动选择端点
         
         Raises:
             DataFetchException: 初始化数据源失败时抛出
@@ -96,12 +96,13 @@ class UnifiedDataFetcher(BaseDataFetcher):
             try:
                 self.primary_source = DataSourceType(primary_source.lower())
             except ValueError:
-                logger.warning(f"未知数据源类型: {primary_source}，使用默认 AKShare")
-                self.primary_source = DataSourceType.AKSHARE
+                raise ValueError(f"未知数据源类型: {primary_source}") from None
         else:
             self.primary_source = primary_source
         
         self.fallback_enabled = fallback_enabled
+        self.last_source = None
+        self.last_attempts = []
         
         # 初始化数据源获取器
         self._init_fetchers(tickflow_api_key, tickflow_use_paid)
@@ -115,7 +116,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
         
         Args:
             tickflow_api_key: TickFlow API Key
-            tickflow_use_paid: 是否使用 TickFlow 付费版
+            tickflow_use_paid: 兼容参数，选择匿名或 Key 认证端点
         """
         self.akshare_fetcher = None
         self.efinance_fetcher = None
@@ -193,21 +194,20 @@ class UnifiedDataFetcher(BaseDataFetcher):
             DataFetchException: 所有数据源都失败时抛出
         """
         # 确定数据源顺序
-        if self.primary_source == DataSourceType.AUTO:
-            sources = [DataSourceType.EFINANCE, DataSourceType.AKSHARE, DataSourceType.TICKFLOW]
-        else:
-            sources = [self.primary_source]
-            if self.fallback_enabled:
-                # 添加备用数据源
-                for s in [DataSourceType.EFINANCE, DataSourceType.AKSHARE, DataSourceType.TICKFLOW]:
-                    if s not in sources:
-                        sources.append(s)
+        priority = [DataSourceType.TICKFLOW, DataSourceType.EFINANCE, DataSourceType.AKSHARE]
+        primary = priority[0] if self.primary_source == DataSourceType.AUTO else self.primary_source
+        sources = [primary]
+        if self.fallback_enabled:
+            sources.extend(source for source in priority if source != primary)
         
         last_error = None
+        self.last_source = None
+        self.last_attempts = []
         
         for source in sources:
             fetcher = self._get_fetcher(source)
             if not fetcher:
+                self.last_attempts.append({"source": source.value, "status": "unavailable"})
                 continue
             
             try:
@@ -215,6 +215,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
                 if not hasattr(fetcher, method_name) and source == DataSourceType.EFINANCE:
                     method_aliases = {
                         'get_daily_quotes': 'get_daily_data',
+                        'get_minute_quotes': 'get_minute_data',
                         'get_financial_indicators': 'get_financial_data',
                     }
                     method_name_to_call = method_aliases.get(method_name, method_name)
@@ -224,10 +225,17 @@ class UnifiedDataFetcher(BaseDataFetcher):
                 result = self._call_fetcher_method(source, method_name, method, *args, **kwargs)
                 if isinstance(result, pd.DataFrame) and result.empty:
                     raise DataFetchException(f"{source.value} 返回空数据")
+                if isinstance(result, dict) and not result:
+                    raise DataFetchException(f"{source.value} 返回空数据")
+                self.last_source = source.value
+                self.last_attempts.append({"source": source.value, "status": "ok"})
+                if isinstance(result, pd.DataFrame):
+                    result.attrs.update(source=source.value, source_attempts=list(self.last_attempts))
                 logger.debug(f"{source.value} 执行 {method_name} 成功")
                 return result
             except Exception as e:
                 logger.warning(f"{source.value} 执行 {method_name} 失败: {e}")
+                self.last_attempts.append({"source": source.value, "status": "error", "error": str(e)})
                 last_error = e
                 continue
         
@@ -235,7 +243,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
         error_msg = f"所有数据源执行 {method_name} 失败"
         if last_error:
             error_msg += f": {last_error}"
-        raise DataFetchException(error_msg)
+        raise DataFetchException(error_msg, details={"source_attempts": self.last_attempts})
 
     def _call_fetcher_method(
         self,
@@ -246,6 +254,12 @@ class UnifiedDataFetcher(BaseDataFetcher):
         **kwargs
     ) -> Any:
         """按数据源差异适配方法参数。"""
+        if source != DataSourceType.TICKFLOW and args and method_name != 'get_stock_list':
+            if method_name == 'get_realtime_quotes':
+                args = ([self._normalize_symbol(s) for s in args[0]], *args[1:])
+            else:
+                args = (self._normalize_symbol(args[0]), *args[1:])
+
         if method_name == 'get_stock_list':
             exchange = args[0] if args else kwargs.get('exchange')
             if source == DataSourceType.EFINANCE:
@@ -265,11 +279,24 @@ class UnifiedDataFetcher(BaseDataFetcher):
             adjust = kwargs.get('adjust', 'qfq')
             if source == DataSourceType.EFINANCE:
                 return method(symbol=symbol, start=start_date, end=end_date, adjust=adjust)
+            if source == DataSourceType.AKSHARE:
+                return method(symbol, start_date, end_date, adjust=adjust)
+            parameters = inspect.signature(method).parameters
+            accepts_adjust = 'adjust' in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+            if accepts_adjust:
+                return method(symbol, start_date, end_date, adjust=adjust)
+            if adjust not in {"", "none"}:
+                raise DataFetchException(f"{source.value} 日线接口无法保证 {adjust} 复权口径")
             return method(symbol, start_date, end_date)
 
         if method_name == 'get_financial_indicators' and source == DataSourceType.EFINANCE:
             symbol = args[0] if args else kwargs.get('symbol')
             return method(symbol)
+
+        if method_name == 'get_minute_quotes' and source == DataSourceType.EFINANCE:
+            symbol, period, start, end = args
+            return method(symbol=symbol, period=int(period.removesuffix('m')),
+                          adjust='', start=start, end=end)
 
         try:
             signature = inspect.signature(method)
@@ -359,13 +386,14 @@ class UnifiedDataFetcher(BaseDataFetcher):
             ...                               end_date='2024-12-31')
         """
         # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
+        symbol = symbol.upper().strip()
         
         df = self._execute_with_fallback(
             'get_daily_quotes',
             symbol,
             start_date,
-            end_date
+            end_date,
+            adjust=adjust,
         )
         if isinstance(df, pd.DataFrame):
             df = df.rename(columns={
@@ -373,7 +401,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
                 'change_percent': 'pct_change',
             })
             if 'symbol' not in df.columns:
-                df['symbol'] = symbol
+                df['symbol'] = self._normalize_symbol(symbol)
         return df
     
     def get_daily_quotes_incremental(
@@ -410,7 +438,7 @@ class UnifiedDataFetcher(BaseDataFetcher):
             ...                                           last_date=date(2024, 1, 10))
         """
         # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
+        symbol = symbol.upper().strip()
         
         # 确定起始日期
         if last_date is None:
@@ -470,44 +498,18 @@ class UnifiedDataFetcher(BaseDataFetcher):
             >>> # 获取5分钟K线
             >>> df = fetcher.get_minute_quotes('600000', period='5m')
             >>> 
-            >>> # 获取1分钟K线（需要 TickFlow 付费版）
+            >>> # 获取1分钟K线（需要 TickFlow 账户有相应权限）
             >>> df = fetcher.get_minute_quotes('600000', period='1m')
         """
-        # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
-        
-        # 分钟数据优先使用 TickFlow
-        if self.tickflow_fetcher:
-            try:
-                logger.debug(f"使用 TickFlow 获取分钟数据: {symbol}")
-                return self.tickflow_fetcher.get_minute_quotes(
-                    symbol, period, start_date, end_date
-                )
-            except Exception as e:
-                logger.warning(f"TickFlow 获取分钟数据失败: {e}")
-        
-        # 尝试 AKShare（支持有限）
-        if self.akshare_fetcher:
-            try:
-                logger.debug(f"使用 AKShare 获取分钟数据: {symbol}")
-                # AKShare 分钟数据接口可能不同，这里调用通用方法
-                return self._execute_with_fallback(
-                    'get_minute_quotes',
-                    symbol,
-                    period,
-                    start_date,
-                    end_date
-                )
-            except Exception as e:
-                logger.warning(f"AKShare 获取分钟数据失败: {e}")
-        
-        raise DataFetchException("无法获取分钟数据，请检查数据源配置")
-    
+        return self._execute_with_fallback(
+            'get_minute_quotes', symbol, period, start_date, end_date
+        )
+
     def get_realtime_quotes(self, symbols: List[str]) -> pd.DataFrame:
         """
         获取实时行情数据
         
-        获取多只股票的最新行情数据。实时行情主要依赖 TickFlow（尤其是付费版）。
+        获取多只股票的最新行情数据。实时行情主要依赖 TickFlow（按账户实际权限）。
         
         Args:
             symbols: 股票代码列表，如 ['600000', '000001', '000858']
@@ -530,27 +532,8 @@ class UnifiedDataFetcher(BaseDataFetcher):
             >>> # 获取多只股票实时行情
             >>> df = fetcher.get_realtime_quotes(['600000', '000001', '000858'])
         """
-        # 标准化股票代码列表
-        symbols = [self._normalize_symbol(s) for s in symbols]
-        
-        # 实时行情优先使用 TickFlow
-        if self.tickflow_fetcher:
-            try:
-                logger.debug(f"使用 TickFlow 获取实时行情: {len(symbols)} 只股票")
-                return self.tickflow_fetcher.get_realtime_quotes(symbols)
-            except Exception as e:
-                logger.warning(f"TickFlow 获取实时行情失败: {e}")
-        
-        # 尝试 AKShare
-        if self.akshare_fetcher:
-            try:
-                logger.debug(f"使用 AKShare 获取实时行情: {len(symbols)} 只股票")
-                return self._execute_with_fallback('get_realtime_quotes', symbols)
-            except Exception as e:
-                logger.warning(f"AKShare 获取实时行情失败: {e}")
-        
-        raise DataFetchException("无法获取实时行情，请检查数据源配置")
-    
+        return self._execute_with_fallback('get_realtime_quotes', symbols)
+
     def get_financial_indicators(self, symbol: str) -> pd.DataFrame:
         """
         获取财务指标数据
@@ -577,11 +560,8 @@ class UnifiedDataFetcher(BaseDataFetcher):
             >>> fetcher = UnifiedDataFetcher()
             >>> df = fetcher.get_financial_indicators('600000')
         """
-        # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
-        
         return self._execute_with_fallback('get_financial_indicators', symbol)
-    
+
     def get_income_statement(self, symbol: str) -> pd.DataFrame:
         """
         获取利润表数据
@@ -601,19 +581,8 @@ class UnifiedDataFetcher(BaseDataFetcher):
             >>> fetcher = UnifiedDataFetcher()
             >>> df = fetcher.get_income_statement('600000')
         """
-        # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
-        
-        # 利润表优先使用 TickFlow
-        if self.tickflow_fetcher:
-            try:
-                return self.tickflow_fetcher.get_income_statement(symbol)
-            except Exception as e:
-                logger.warning(f"TickFlow 获取利润表失败: {e}")
-        
-        # 尝试 AKShare
         return self._execute_with_fallback('get_income_statement', symbol)
-    
+
     def get_balance_sheet(self, symbol: str) -> pd.DataFrame:
         """
         获取资产负债表数据
@@ -633,19 +602,8 @@ class UnifiedDataFetcher(BaseDataFetcher):
             >>> fetcher = UnifiedDataFetcher()
             >>> df = fetcher.get_balance_sheet('600000')
         """
-        # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
-        
-        # 资产负债表优先使用 TickFlow
-        if self.tickflow_fetcher:
-            try:
-                return self.tickflow_fetcher.get_balance_sheet(symbol)
-            except Exception as e:
-                logger.warning(f"TickFlow 获取资产负债表失败: {e}")
-        
-        # 尝试 AKShare
         return self._execute_with_fallback('get_balance_sheet', symbol)
-    
+
     def get_cash_flow(self, symbol: str) -> pd.DataFrame:
         """
         获取现金流量表数据
@@ -665,19 +623,8 @@ class UnifiedDataFetcher(BaseDataFetcher):
             >>> fetcher = UnifiedDataFetcher()
             >>> df = fetcher.get_cash_flow('600000')
         """
-        # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
-        
-        # 现金流量表优先使用 TickFlow
-        if self.tickflow_fetcher:
-            try:
-                return self.tickflow_fetcher.get_cash_flow(symbol)
-            except Exception as e:
-                logger.warning(f"TickFlow 获取现金流量表失败: {e}")
-        
-        # 尝试 AKShare
         return self._execute_with_fallback('get_cash_flow', symbol)
-    
+
     def get_instrument_info(self, symbol: str) -> Dict[str, Any]:
         """
         获取标的信息
@@ -703,19 +650,8 @@ class UnifiedDataFetcher(BaseDataFetcher):
             >>> info = fetcher.get_instrument_info('600000')
             >>> print(info['name'])  # 输出: 浦发银行
         """
-        # 标准化股票代码
-        symbol = self._normalize_symbol(symbol)
-        
-        # 标的信息优先使用 TickFlow
-        if self.tickflow_fetcher:
-            try:
-                return self.tickflow_fetcher.get_instrument_info(symbol)
-            except Exception as e:
-                logger.warning(f"TickFlow 获取标的信息失败: {e}")
-        
-        # 尝试 AKShare
         return self._execute_with_fallback('get_instrument_info', symbol)
-    
+
     def _normalize_symbol(self, symbol: str) -> str:
         """
         标准化股票代码格式
@@ -832,7 +768,13 @@ class UnifiedDataFetcher(BaseDataFetcher):
         Returns:
             描述字符串
         """
-        sources = self.get_available_sources()
+        sources = [source.value for source in (DataSourceType.TICKFLOW, DataSourceType.EFINANCE, DataSourceType.AKSHARE)
+                   if self._get_fetcher(source) is not None]
         return (f"UnifiedDataFetcher(primary={self.primary_source.value}, "
                 f"fallback={'on' if self.fallback_enabled else 'off'}, "
                 f"available={sources})")
+
+    def close(self):
+        """Release the persistent TickFlow HTTP client."""
+        if self.tickflow_fetcher is not None:
+            self.tickflow_fetcher.close()

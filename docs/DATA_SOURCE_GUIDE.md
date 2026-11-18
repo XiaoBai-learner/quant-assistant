@@ -1,5 +1,7 @@
 # 数据源使用指南
 
+> 2026-11-18：行情入口已统一采用 TickFlow 主源；匿名免费不支持财务、实时、分钟数据，Key 服务按账户实际权限返回。现行配置、复权与测试方法见 [TickFlow 接入与测试](TICKFLOW_GUIDE.md)。
+
 > 本指南详细介绍 Quant Assistant 的数据源配置和使用方法
 
 ---
@@ -38,7 +40,7 @@ Quant Assistant 支持多个数据源，通过统一接口对外提供服务：
 ```python
 from quant_assistant.data import UnifiedDataFetcher
 
-# 创建统一数据获取器（默认 AKShare 为主，其他为备用）
+# 创建统一数据获取器（默认 TickFlow 为主，EFinance / AKShare 为备用）
 fetcher = UnifiedDataFetcher()
 
 # 获取股票列表
@@ -59,10 +61,10 @@ df = fetcher.get_daily_quotes(
 # 使用 TickFlow 为主数据源
 fetcher = UnifiedDataFetcher(primary_source='tickflow')
 
-# 使用 AKShare 为主数据源（默认）
+# 显式使用 AKShare 为主数据源
 fetcher = UnifiedDataFetcher(primary_source='akshare')
 
-# 自动选择（根据接口智能选择最优数据源）
+# 自动选择（固定优先级 TickFlow → EFinance → AKShare）
 fetcher = UnifiedDataFetcher(primary_source='auto')
 ```
 
@@ -86,8 +88,8 @@ from quant_assistant.data import UnifiedDataFetcher
 fetcher = UnifiedDataFetcher(
     primary_source='tickflow',        # 主数据源
     fallback_enabled=True,            # 启用故障切换
-    tickflow_api_key='your-key',      # TickFlow API Key（付费版需要）
-    tickflow_use_paid=True            # 使用 TickFlow 付费版
+    tickflow_api_key='your-key',      # TickFlow API Key（认证端点使用）
+    tickflow_use_paid=True            # 使用 TickFlow 认证端点，按账户权限访问
 )
 ```
 
@@ -133,47 +135,23 @@ df = fetcher.get_financial_indicators('600000')
 
 ## 4. TickFlow 数据源
 
-### 4.1 特点
-
-- **API 稳定**：RESTful API，响应稳定
-- **分钟级数据**：支持 1m/5m/15m/30m/60m K线
-- **实时行情**：付费版支持实时行情推送
-- **免费可用**：免费版无需注册即可使用基础功能
-
-### 4.2 免费版 vs 付费版
-
-| 功能 | 免费版 | 付费版 |
-|------|--------|--------|
-| 日K线数据 | ✅ | ✅ |
-| 股票列表 | ✅ | ✅ |
-| 财务数据 | ✅ | ✅ |
-| 分钟级K线 | ❌ | ✅ |
-| 实时行情 | ❌ | ✅ |
-| 访问频率 | 较低 | 较高 |
-
-### 4.3 直接使用
+TickFlow 为默认主源，使用官方 SDK。匿名免费端点支持历史日线、标的信息和股票列表；认证端点按 Key 的账户权限提供能力。2026-11-18 本地 Key 实测日线和实时快照可用，分钟 K 线和财务数据返回 HTTP 403。
 
 ```python
 from quant_assistant.data import TickFlowFetcher
 
-# 免费版（无需 API Key）
-fetcher = TickFlowFetcher()
+# 显式选择匿名历史服务
+fetcher = TickFlowFetcher(mode="free")
+try:
+    df = fetcher.get_daily_quotes("600000.SH", start_date="2026-10-01")
+finally:
+    fetcher.close()
 
-# 付费版（需要 API Key）
-fetcher = TickFlowFetcher(
-    api_key='your-api-key',
-    use_paid=True
-)
-
-# 获取日线数据
-df = fetcher.get_daily_quotes('600000.SH', start_date='2024-01-01')
-
-# 获取分钟数据（需要付费版）
-df = fetcher.get_minute_quotes('600000.SH', period='5m')
-
-# 获取实时行情（需要付费版）
-df = fetcher.get_realtime_quotes(['600000.SH', '000001.SZ'])
+# 使用本地 .env 的 Key；认证不代表付费，权限以服务端为准
+fetcher = TickFlowFetcher(mode="authenticated")
 ```
+
+详细的环境变量、复权与成交量单位、主备来源、诊断及实测结果见 [TickFlow 接入与测试](TICKFLOW_GUIDE.md)。
 
 ---
 
@@ -217,8 +195,8 @@ fetcher = UnifiedDataFetcher()
 df = fetcher.get_daily_quotes('600000', start_date='2024-01-01')
 
 # 内部逻辑：
-# 1. 优先使用主数据源（默认 AKShare）
-# 2. 如果失败，自动切换到备用数据源（TickFlow）
+# 1. 优先使用主数据源（默认 TickFlow）
+# 2. 如果失败，按顺序切换 EFinance、AKShare
 ```
 
 ### 6.2 分钟数据
@@ -239,7 +217,7 @@ from quant_assistant.data import UnifiedDataFetcher
 
 fetcher = UnifiedDataFetcher()
 
-# 实时行情优先使用 EFinance 或 TickFlow
+# 实时行情优先使用 TickFlow，失败后尝试备用源
 df = fetcher.get_realtime_quotes(['600000', '000001'])
 ```
 
@@ -251,10 +229,10 @@ df = fetcher.get_realtime_quotes(['600000', '000001'])
 
 ```python
 UnifiedDataFetcher(
-    primary_source='akshare',      # 主数据源: 'akshare' | 'tickflow' | 'efinance' | 'auto'
+    primary_source='tickflow',     # 主数据源: 'akshare' | 'tickflow' | 'efinance' | 'auto'
     fallback_enabled=True,         # 是否启用故障切换: True | False
-    tickflow_api_key=None,         # TickFlow API Key（付费版需要）
-    tickflow_use_paid=False        # 是否使用 TickFlow 付费版: True | False
+    tickflow_api_key=None,         # TickFlow API Key（认证端点使用）
+    tickflow_use_paid=False        # 是否使用 TickFlow 认证端点，按账户权限访问: True | False
 )
 ```
 
@@ -301,7 +279,7 @@ fetcher = UnifiedDataFetcher(primary_source='tickflow')
 
 ### Q4: 如何获取分钟级数据？
 
-**A**: 分钟级数据需要 TickFlow 付费版或 EFinance：
+**A**: 分钟级数据需要 TickFlow 账户具备权限，或使用 EFinance 备用源：
 
 ```python
 from quant_assistant.data import UnifiedDataFetcher

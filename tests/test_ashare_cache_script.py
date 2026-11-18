@@ -65,3 +65,10 @@ def test_cache_script_dry_run_reports_explicit_symbols(tmp_path):
     report = run(args)
 
     assert report["symbols"] == ["000001", "600000.SH"]
+
+
+def test_cache_script_accepts_strict_source_test(tmp_path):
+    args = build_parser().parse_args(["--update-latest", "--source", "tickflow", "--no-fallback",
+                                      "--cache-dir", str(tmp_path / "cache"),
+                                      "--report", str(tmp_path / "probe.json"), "--dry-run"])
+    assert run(args)["fallback_enabled"] is False

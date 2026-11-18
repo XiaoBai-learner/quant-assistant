@@ -15,8 +15,10 @@ class DataHub:
         self,
         tencent: Optional[TencentProvider] = None,
         eastmoney: Optional[EastMoneyProvider] = None,
+        market_fetcher=None,
     ):
         self.tencent = tencent or TencentProvider()
         self.eastmoney = eastmoney or EastMoneyProvider()
-        self.market = MarketDataset(self.tencent)
+        self.market = MarketDataset(self.tencent, market_fetcher=market_fetcher,
+                                    prefer_tencent=tencent is not None and market_fetcher is None)
         self.signals = SignalDataset(self.eastmoney)

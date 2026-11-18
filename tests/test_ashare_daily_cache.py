@@ -80,6 +80,19 @@ class FakeDataAPI:
         })
 
 
+def test_cache_update_report_keeps_actual_source(tmp_path):
+    class MetadataAPI(FakeDataAPI):
+        def get_stock_data(self, *args, **kwargs):
+            frame = super().get_stock_data(*args, **kwargs)
+            frame.attrs = {"source": "tickflow", "mode": "authenticated", "adjust": "forward_additive"}
+            return frame
+
+    updater = AshareCacheUpdater(data_api=MetadataAPI(), cache=AshareDailyCache(str(tmp_path)))
+    report = updater.update_range("2026-11-16", "2026-11-17", symbols=["000001"])
+    assert report["symbols"]["000001.SZ"]["source"] == "tickflow"
+    assert report["symbols"]["000001.SZ"]["mode"] == "authenticated"
+
+
 class FakeDailyOnlyAPI:
     def get_stock_list(self, market="all"):
         raise AssertionError("daily data API should not be used for stock list")

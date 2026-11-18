@@ -54,6 +54,13 @@ class EFinanceFetcher:
     def is_available(self) -> bool:
         """检查 EFinance 是否可用"""
         return self._efinance is not None
+
+    @staticmethod
+    def _adjustment_mode(adjust: str) -> int:
+        try:
+            return {"": 0, "none": 0, "qfq": 1, "hfq": 2}[adjust]
+        except KeyError as exc:
+            raise ValueError(f"不支持的复权类型: {adjust}") from exc
     
     def get_realtime_quotes(
         self,
@@ -175,7 +182,7 @@ class EFinanceFetcher:
             df = self._efinance.stock.get_quote_history(
                 symbol,
                 klt=period,
-                fqt=adjust,
+                fqt=self._adjustment_mode(adjust),
                 beg=begin_date,
                 end=end_date
             )
@@ -272,7 +279,7 @@ class EFinanceFetcher:
             df = self._efinance.stock.get_quote_history(
                 symbol,
                 klt=101,  # 日K
-                fqt=adjust,
+                fqt=self._adjustment_mode(adjust),
                 beg=begin_date,
                 end=end_date
             )

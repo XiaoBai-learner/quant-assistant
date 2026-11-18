@@ -123,6 +123,11 @@ class DataAPI:
         """设置自定义查询引擎。"""
         self._query = query
 
+    def close(self) -> None:
+        """Close an initialized fetcher without creating new network clients."""
+        if self._fetcher is not None and hasattr(self._fetcher, "close"):
+            self._fetcher.close()
+
     def _format_date(self, value: Optional[Union[str, date]]) -> Optional[str]:
         """统一将日期参数转换为 YYYY-MM-DD 字符串。"""
         if value is None:

@@ -206,7 +206,10 @@ class AshareCacheUpdater:
                     continue
                 cached = self.cache.append_symbol(symbol, data)
                 report["success_count"] += 1
-                report["symbols"][symbol] = {"status": "ok", "rows": int(len(data)), "cached_rows": int(len(cached))}
+                report["symbols"][symbol] = {
+                    "status": "ok", "rows": int(len(data)), "cached_rows": int(len(cached)),
+                    **{key: data.attrs[key] for key in ("source", "mode", "adjust", "source_attempts") if key in data.attrs},
+                }
             except Exception as exc:  # noqa: BLE001 - third-party data sources raise heterogeneous errors
                 report["failed_count"] += 1
                 report["symbols"][symbol] = {"status": "failed", "rows": 0, "message": str(exc)}

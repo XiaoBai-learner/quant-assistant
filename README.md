@@ -116,12 +116,14 @@ quant ml train 300751 --model random_forest
 
 ## 数据源
 
+默认使用 **TickFlow 主源**；配置 `TICKFLOW_API_KEY` 和 `TICKFLOW_MODE=authenticated` 后可使用账户实际权限。匿名历史服务使用 `TICKFLOW_MODE=free`。运行 `python scripts/diagnose_tickflow.py --mode both` 可生成无备用源干扰的测试报告，详见 [TickFlow 接入与测试](docs/TICKFLOW_GUIDE.md)。
+
 项目当前包含三类主要数据源：
 
 - `AKShareFetcher`：免费开源数据，覆盖面广，适合日线和基础数据研究。
 - `EFinanceFetcher`：适合行情、分钟和实时数据场景。
-- `TickFlowFetcher`：支持免费/付费模式，付费模式可扩展分钟级和实时行情。
-- `UnifiedDataFetcher`：高层 API 默认使用的统一数据获取器，按 EFinance、AKShare、TickFlow 做主备尝试，支持故障切换、空结果 fallback 和基础字段标准化。
+- `TickFlowFetcher`：使用官方 SDK，区分匿名免费与 Key 认证端点；认证能力按账户权限判断。
+- `UnifiedDataFetcher`：高层 API 默认使用的统一数据获取器，按 TickFlow、EFinance、AKShare 做主备尝试，支持故障切换、空结果 fallback 和基础字段标准化。
 
 `api.data.get_stock_data()` 会把不同数据源返回的 `date`、`change_percent` 等字段统一为 `trade_date`、`pct_change` 等常用字段，并按用户传入的日期区间做最终裁剪。如果数据源返回了区间外数据，会给出明确错误，避免静默返回误导性的空结果。
 
